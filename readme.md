@@ -92,11 +92,7 @@ explicit. From `simulate/build`, start the flat scene with:
 ./unitree_mujoco -r as2 -s plane_terrain.xml -t 1
 ```
 
-Use `scene_terrain.xml` instead for the rough-terrain scene. To test with
-`2_as2_control`, keep the simulator on DDS domain `1` and interface `lo`, build
-the controller with `EXECUTE_ONBOARD=false`, then run its x86 `ai_sport`
-binary in a second terminal. This loopback setup must not be connected to a
-real robot.
+Use `scene_terrain.xml` instead for the rough-terrain scene.
 
 ## Python Simulator (simulate_python)
 ### 1. Dependencies

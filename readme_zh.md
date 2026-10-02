@@ -94,10 +94,7 @@ IDL，也可以通过 `-t 1` 显式指定。在 `simulate/build` 中运行平地
 ./unitree_mujoco -r as2 -s plane_terrain.xml -t 1
 ```
 
-将场景名替换为 `scene_terrain.xml` 可以加载复杂地形。与
-`2_as2_control` 联调时，仿真器保持 DDS domain `1`、网卡 `lo`，控制程序使用
-`EXECUTE_ONBOARD=false` 构建，并在另一个终端启动 x86 `ai_sport`。该回环配置
-不得连接实机。
+将场景名替换为 `scene_terrain.xml` 可以加载复杂地形。
 
 ## Python 仿真器 (simulate_python)
 ### 1. 依赖
