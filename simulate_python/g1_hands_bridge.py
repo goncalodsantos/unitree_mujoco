@@ -1,25 +1,34 @@
-"""DDS <-> MuJoCo bridge for the G1's Dex3 hands, meant to run alongside (not
+"""
+DDS <-> MuJoCo bridge for the G1's Dex3 hands, meant to run alongside (not
 instead of) the official UnitreeSdk2Bridge when using a body+hand model
 (g1_29dof_hand14.xml, 43 actuators: 29 body + 7 left hand + 7 right hand).
 
-Why a separate bridge instead of extending UnitreeSdk2Bridge: the real Dex3
+- Why a separate bridge instead of extending UnitreeSdk2Bridge: the real Dex3
 hand does NOT go over rt/lowcmd/rt/lowstate - those use unitree_hg's LowCmd_/
 LowState_, whose motor_cmd/motor_state are a FIXED-size array of 35 slots.
-29 body + 14 hand = 43 would overflow that array. The real hand instead uses
-its own topics (rt/dex3/left/cmd, rt/dex3/right/cmd, .../state) with HandCmd_/
+29 body + 14 hand = 43 would overflow that array. 
+- The real hand instead uses its own topics (rt/dex3/left/cmd, rt/dex3/right/cmd, .../state) with HandCmd_/
 HandState_, which use variable-length sequences (7 motors each) instead of a
-fixed 35-slot array. So this bridge is deliberately independent of the body
-bridge, and the body bridge (unchanged, from unitree_sdk2py_bridge.py) must
-be limited to the first 29 actuators when used with this model - see
-g1_hands_run.py, which does that instead of using UnitreeSdk2Bridge directly.
+fixed 35-slot array. 
+- So this bridge is deliberately independent of the body bridge, and the body bridge 
+(unchanged, from unitree_sdk2py_bridge.py) must be limited to the first 29 actuators when used with this model. 
+See g1_hands_run.py, which does that instead of using UnitreeSdk2Bridge directly.
 """
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber
-from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_, unitree_hg_msg_dds__HandState_
+from unitree_sdk2py.idl.default import (
+    unitree_hg_msg_dds__HandCmd_,
+    unitree_hg_msg_dds__HandState_,
+    unitree_hg_msg_dds__PressSensorState_,
+)
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_, MotorState_
 from unitree_sdk2py.utils.thread import RecurrentThread
 
 NUM_HAND_MOTOR = 7
+# Pressure sensors per hand on the real G1 (per the Humanoid Everyday dataset docs).
+# The MuJoCo model has no touch sensors, so these are published as zeros - an
+# honest "no reading" - just so code indexing press_sensor_state works in sim too.
+NUM_PRESS_SENSOR = 9
 
 # Dex3 gains are much smaller than the arm's, matching Unitree's own
 # example/g1/dex3/g1_dex3_example.cpp (kp~0.5-1.5, kd~0.1). Empirically
@@ -101,5 +110,5 @@ class HandBridge:
             )
             motor_states.append(ms)
         state.motor_state = motor_states
-        state.press_sensor_state = []
+        state.press_sensor_state = [unitree_hg_msg_dds__PressSensorState_() for _ in range(NUM_PRESS_SENSOR)]
         self.state_puber.Write(state)

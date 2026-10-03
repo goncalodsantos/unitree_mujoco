@@ -1,9 +1,10 @@
-"""Run the G1 sim with Dex3 hands (g1_29dof_hand14, 43 actuators).
+"""
+Run the G1 sim with Dex3 hands (g1_29dof_hand14, 43 actuators).
 
-Body (29 motors) still talks rt/lowcmd/rt/lowstate exactly like the plain
-unitree_mujoco.py entry point. Hands (7+7 motors) talk rt/dex3/{left,right}
-/cmd and /state instead - see g1_hands_bridge.py for why they can't share
-the body's LowCmd_/LowState_ channel (35-slot fixed array, would overflow
+- Body (29 motors) still talks rt/lowcmd/rt/lowstate exactly like the plain
+unitree_mujoco.py entry point. 
+- Hands (7+7 motors) talk rt/dex3/{left,right} /cmd and /state instead - see g1_hands_bridge.py 
+for why they can't share the body's LowCmd_/LowState_ channel (35-slot fixed array, would overflow
 at 43 motors).
 
     conda activate g1

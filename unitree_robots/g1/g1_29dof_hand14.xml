@@ -1,4 +1,17 @@
 <mujoco model="g1_29dof">
+<!--
+  Provenance (checked by comparing joints and link inertials with the source files):
+  - Body (29 links/joints, joint classes torso_motor/leg_motor/... with damping,
+    armature, frictionloss): identical to g1_29dof.xml in this repo. The joint
+    classes are a unitree_mujoco simulation addition, absent from the xr_teleoperate
+    and unitree_ros descriptions.
+  - Dex3 hands (14 joints + links): match xr_teleoperate/assets/g1/g1_body29_hand14.xml
+    (joint names and ranges identical; link inertials identical). unitree_ros
+    g1_29dof_with_hand_rev_1_0.xml is indistinguishable on these, so it may equally
+    be the source.
+  - Only joint names/ranges and link inertials were compared; actuator gains,
+    collision geoms and sensors were not.
+-->
   <compiler angle="radian" meshdir="meshes" />
 
   <default>
