@@ -112,3 +112,165 @@ class HandBridge:
         state.motor_state = motor_states
         state.press_sensor_state = [unitree_hg_msg_dds__PressSensorState_() for _ in range(NUM_PRESS_SENSOR)]
         self.state_puber.Write(state)
+
+
+# ---------------------------------------------------------------------------
+# Other hands. Unlike Dex3 (unitree_hg HandCmd_/HandState_, direct q/kp/kd per motor),
+# these use higher-level protocols, so each bridge converts the received command to a
+# joint target and runs a joint-space PD on the simulated finger joints. The PD gains
+# below are OUR choices for the simulated joints, not Unitree/vendor values.
+# Protocol sources: unitreerobotics/dex1_1_service, brainco_hand_service and
+# xr_teleoperate (Dex1, BrainCo), inspire_hand_ws IDL (Inspire FTP).
+# ---------------------------------------------------------------------------
+import numpy as np
+from unitree_sdk2py.idl.default import unitree_go_msg_dds__MotorState_
+from unitree_sdk2py.idl.unitree_go.msg.dds_ import MotorCmds_, MotorStates_
+
+from inspire_idl import inspire_hand_ctrl, inspire_hand_state
+
+
+class _JointPdHand:
+    """A group of simulated actuators held by a joint-space PD toward a target vector."""
+
+    kp = 10.0
+    kd = 0.5
+
+    def __init__(self, mj_model, mj_data, actuator_indices, publish_name):
+        self.m, self.d = mj_model, mj_data
+        self.act = list(actuator_indices)
+        self.total = mj_model.nu
+        self.target = None  # joint-space target, set by the protocol handler
+        # joint limits of the actuated joints, used to map normalised commands to angles
+        self.lo = np.array([mj_model.jnt_range[mj_model.actuator_trnid[a, 0], 0] for a in self.act])
+        self.hi = np.array([mj_model.jnt_range[mj_model.actuator_trnid[a, 0], 1] for a in self.act])
+        # Same 100 Hz state thread as HandBridge (see the note there about CPU starvation).
+        self.state_thread = RecurrentThread(interval=0.01, target=self._publish_state, name=publish_name)
+
+    def start(self):
+        self.state_thread.Start()
+
+    def q(self):
+        return np.array([self.d.sensordata[a] for a in self.act])
+
+    def dq(self):
+        return np.array([self.d.sensordata[a + self.total] for a in self.act])
+
+    def apply_ctrl(self):
+        if self.target is None:
+            return
+        q, dq = self.q(), self.dq()
+        tau = self.kp * (self.target - q) - self.kd * dq
+        for k, a in enumerate(self.act):
+            self.d.ctrl[a] = tau[k]
+
+    def _publish_state(self):  # implemented by the protocol subclass
+        raise NotImplementedError
+
+
+class Dex1Bridge(_JointPdHand):
+    """Dex1-1 gripper: rt/dex1/{left,right}/cmd|state, unitree_go MotorCmds_/MotorStates_,
+    ONE motor per gripper (cmds[0].q). q is the motor angle in rad, 0 = closed (calibrated
+    closed), up to ~5.4 rad = fully open (xr_teleoperate's mapped range). The sim model has two
+    prismatic fingers (finger_joint_1/2); both move 0 .. +upper limit symmetrically.
+    Gains: N/m and N*s/m on the finger slides (our choice)."""
+
+    kp = 300.0
+    kd = 10.0
+    Q_OPEN = 5.4
+
+    def __init__(self, mj_model, mj_data, side, actuator_indices):
+        super().__init__(mj_model, mj_data, actuator_indices, f"dex1_{side}_state")
+        assert len(self.act) == 2
+        self.hi_open = float(self.hi.min())  # shared opening per finger (m)
+        self.last_cmd = None
+        self.state_puber = ChannelPublisher(f"rt/dex1/{side}/state", MotorStates_)
+        self.state_puber.Init()
+        self.cmd_suber = ChannelSubscriber(f"rt/dex1/{side}/cmd", MotorCmds_)
+        self.cmd_suber.Init(self._on_cmd, 10)
+        self.start()
+
+    def _on_cmd(self, msg):
+        if msg.cmds:
+            frac = float(np.clip(msg.cmds[0].q / self.Q_OPEN, 0.0, 1.0))
+            self.target = np.full(2, frac * self.hi_open)
+
+    def _publish_state(self):
+        frac = float(np.clip(self.q().mean() / self.hi_open, 0.0, 1.0))
+        ms = unitree_go_msg_dds__MotorState_()
+        ms.mode = 1
+        ms.q = frac * self.Q_OPEN
+        ms.dq = float(self.dq().mean() / self.hi_open * self.Q_OPEN)
+        self.state_puber.Write(MotorStates_([ms]))
+
+
+class BrainCoBridge(_JointPdHand):
+    """BrainCo hand: rt/brainco/{left,right}/cmd|state, unitree_go MotorCmds_/MotorStates_, 6 motors in
+    the order [Thumb, Thumb_aux, Index, Middle, Ring, Pinky] with q normalised to [0,1]
+    (0 = open, 1 = closed) and dq (speed) normalised to [0,1] (ignored here).
+    `actuator_indices` must follow that order."""
+
+    kp = 2.0
+    kd = 0.1
+
+    def __init__(self, mj_model, mj_data, side, actuator_indices):
+        super().__init__(mj_model, mj_data, actuator_indices, f"brainco_{side}_state")
+        assert len(self.act) == 6
+        self.state_puber = ChannelPublisher(f"rt/brainco/{side}/state", MotorStates_)
+        self.state_puber.Init()
+        self.cmd_suber = ChannelSubscriber(f"rt/brainco/{side}/cmd", MotorCmds_)
+        self.cmd_suber.Init(self._on_cmd, 10)
+        self.start()
+
+    def _on_cmd(self, msg):
+        if len(msg.cmds) >= 6:
+            q = np.clip([c.q for c in msg.cmds[:6]], 0.0, 1.0)
+            self.target = self.lo + q * (self.hi - self.lo)
+
+    def _publish_state(self):
+        frac = np.clip((self.q() - self.lo) / (self.hi - self.lo), 0.0, 1.0)
+        states = []
+        for k in range(6):
+            ms = unitree_go_msg_dds__MotorState_()
+            ms.mode = 1
+            ms.q = float(frac[k])
+            ms.dq = float(self.dq()[k] / (self.hi[k] - self.lo[k]))
+            states.append(ms)
+        self.state_puber.Write(MotorStates_(states))
+
+
+class InspireFTPBridge(_JointPdHand):
+    """Inspire FTP hand: rt/inspire_hand/ctrl/{l,r} (inspire::inspire_hand_ctrl) and
+    rt/inspire_hand/state/{l,r} (inspire::inspire_hand_state), 6 motors in the order
+    [pinky, ring, middle, index, thumb-bend, thumb-rotation]. Only angle control is simulated
+    (mode bit 0): angle_set is 0..1000 with 1000 = open, 0 = closed; -1 = no change.
+    Force/speed/position modes and the touch topic are ignored.
+    `actuator_indices` must follow that order."""
+
+    kp = 8.0
+    kd = 0.4
+
+    def __init__(self, mj_model, mj_data, side, actuator_indices):
+        super().__init__(mj_model, mj_data, actuator_indices, f"inspire_{side}_state")
+        assert len(self.act) == 6
+        self.openness = np.ones(6)
+        tag = "l" if side == "left" else "r"
+        self.state_puber = ChannelPublisher(f"rt/inspire_hand/state/{tag}", inspire_hand_state)
+        self.state_puber.Init()
+        self.cmd_suber = ChannelSubscriber(f"rt/inspire_hand/ctrl/{tag}", inspire_hand_ctrl)
+        self.cmd_suber.Init(self._on_cmd, 10)
+        self.start()
+
+    def _on_cmd(self, msg):
+        if not (msg.mode & 0b0001) or len(msg.angle_set) < 6:
+            return
+        for k, v in enumerate(msg.angle_set[:6]):
+            if v >= 0:  # -1 means "leave this finger as it is"
+                self.openness[k] = np.clip(v / 1000.0, 0.0, 1.0)
+        self.target = self.lo + (1.0 - self.openness) * (self.hi - self.lo)
+
+    def _publish_state(self):
+        openness = 1.0 - np.clip((self.q() - self.lo) / (self.hi - self.lo), 0.0, 1.0)
+        angle = [int(round(1000 * o)) for o in openness]
+        self.state_puber.Write(inspire_hand_state(
+            pos_act=angle, angle_act=angle, force_act=[0] * 6, current=[0] * 6,
+            err=[0] * 6, status=[0] * 6, temperature=[0] * 6))

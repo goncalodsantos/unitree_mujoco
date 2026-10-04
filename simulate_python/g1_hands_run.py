@@ -1,17 +1,21 @@
 """
-Run the G1 sim with Dex3 hands (g1_29dof_hand14, 43 actuators).
+Run the G1 sim with a dexterous hand/gripper attached, fixed pelvis.
 
-- Body (29 motors) still talks rt/lowcmd/rt/lowstate exactly like the plain
+- Body (29 motors) talks rt/lowcmd / rt/lowstate exactly like the plain
 unitree_mujoco.py entry point. 
-- Hands (7+7 motors) talk rt/dex3/{left,right} /cmd and /state instead - see g1_hands_bridge.py 
-for why they can't share the body's LowCmd_/LowState_ channel (35-slot fixed array, would overflow
-at 43 motors).
+- The Hands talk their own DDS protocol, see
+g1_hands_bridge.py (Dex3 and why it can't share LowCmd_) for details.
 
     conda activate g1
     cd third_party/unitree_mujoco/simulate_python
-    python g1_hands_run.py
+    python g1_hands_run.py                      # Dex3, 43 actuators (default)
+    python g1_hands_run.py --hand dex1          # Dex1-1 gripper
+    python g1_hands_run.py --hand inspire_ftp   # Inspire FTP
+    python g1_hands_run.py --hand brainco       # BrainCo
+    python g1_hands_run.py --hand dex1 --free-base   # pelvis not welded
 """
 
+import argparse
 import time
 import threading
 from threading import Thread
@@ -24,21 +28,45 @@ from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowState_
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
 from unitree_sdk2py.utils.thread import RecurrentThread
 
-from g1_hands_bridge import HandBridge
+from g1_hands_bridge import BrainCoBridge, Dex1Bridge, HandBridge, InspireFTPBridge
 from unitree_sdk2py_bridge import ElasticBand
 
-MODEL_PATH = "../unitree_robots/g1/scene_29dof_hand14_fixed_base.xml"
 DOMAIN_ID = 1
 INTERFACE = "lo"
-NUM_BODY_MOTOR = 29
-LEFT_HAND_OFFSET = 29
-RIGHT_HAND_OFFSET = 36
+NUM_BODY_MOTOR = 29  # LowCmd_/LowState_ slots used by the G1 body
+
+ROBOTS_DIR = "../unitree_robots/g1/"
+HANDS = {
+    "dex3": "scene_29dof_hand14_fixed_base.xml",
+    "dex1": "scene_29dof_dex1_fixed_base.xml",
+    "inspire_ftp": "scene_29dof_inspire_ftp_fixed_base.xml",
+    "brainco": "scene_29dof_brainco_fixed_base.xml",
+}
+# Actuator names per hardware motor index, per side (the order each protocol uses).
+INSPIRE_ORDER = ["little_1", "ring_1", "middle_1", "index_1", "thumb_2", "thumb_1"]  # pinky, ring, middle, index, thumb-bend, thumb-rotation
+BRAINCO_ORDER = ["thumb_proximal", "thumb_metacarpal", "index_proximal", "middle_proximal", "ring_proximal", "pinky_proximal"]  # Thumb, Thumb_aux, Index, Middle, Ring, Pinky
+
+parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+parser.add_argument("--hand", choices=list(HANDS), default="dex3")
+parser.add_argument("--free-base", action="store_true", help="do not weld the pelvis to the world (the robot has no balance controller and will fall; use the elastic band, key 9)")
+args = parser.parse_args()
 
 locker = threading.Lock()
 
-mj_model = mujoco.MjModel.from_xml_path(MODEL_PATH)
+scene = HANDS[args.hand].replace("_fixed_base", "") if args.free_base else HANDS[args.hand]
+mj_model = mujoco.MjModel.from_xml_path(ROBOTS_DIR + scene)
 mj_data = mujoco.MjData(mj_model)
-assert mj_model.nu == 43, f"expected 43 actuators (29 body + 14 hand), got {mj_model.nu}"
+
+# DDS motor index -> actuator index for the body (identity: the models list the 29 body motors first).
+BODY_MAP = {i: i for i in range(NUM_BODY_MOTOR)}
+N_BODY_ACT = len(BODY_MAP)
+
+
+def actuator_id(name: str) -> int:
+    idx = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+    assert idx >= 0, f"actuator '{name}' not in {HANDS[args.hand]}"
+    return idx
+
 
 elastic_band = ElasticBand()
 band_attached_link = mj_model.body("torso_link").id
@@ -46,9 +74,9 @@ viewer = mujoco.viewer.launch_passive(mj_model, mj_data, key_callback=elastic_ba
 
 
 class BodyBridge29:
-    """Same LowCmd_/LowState_ PD logic as UnitreeSdk2Bridge, but hardcoded
-    to the first 29 actuators only - deliberately NOT using mj_model.nu
-    (43), which would index past LowCmd_.motor_cmd's fixed 35 slots."""
+    """Same LowCmd_/LowState_ PD logic as UnitreeSdk2Bridge, but only for the body motors -
+    deliberately NOT using mj_model.nu (which also counts the hand motors and would index
+    past LowCmd_.motor_cmd's fixed 35 slots)."""
 
     def __init__(self, mj_model, mj_data):
         self.mj_model = mj_model
@@ -67,28 +95,45 @@ class BodyBridge29:
         self.state_thread.Start()
 
     def LowCmdHandler(self, msg: LowCmd_):
-        for i in range(NUM_BODY_MOTOR):
-            q = self.mj_data.sensordata[i]
-            dq = self.mj_data.sensordata[i + mj_model.nu]
-            self.mj_data.ctrl[i] = (
-                msg.motor_cmd[i].tau
-                + msg.motor_cmd[i].kp * (msg.motor_cmd[i].q - q)
-                + msg.motor_cmd[i].kd * (msg.motor_cmd[i].dq - dq)
+        for dds_i, act in BODY_MAP.items():
+            q = self.mj_data.sensordata[act]
+            dq = self.mj_data.sensordata[act + mj_model.nu]
+            self.mj_data.ctrl[act] = (
+                msg.motor_cmd[dds_i].tau
+                + msg.motor_cmd[dds_i].kp * (msg.motor_cmd[dds_i].q - q)
+                + msg.motor_cmd[dds_i].kd * (msg.motor_cmd[dds_i].dq - dq)
             )
 
     def PublishLowState(self):
-        for i in range(NUM_BODY_MOTOR):
-            self.low_state.motor_state[i].q = self.mj_data.sensordata[i]
-            self.low_state.motor_state[i].dq = self.mj_data.sensordata[i + mj_model.nu]
-            self.low_state.motor_state[i].tau_est = self.mj_data.sensordata[i + 2 * mj_model.nu]
+        for dds_i, act in BODY_MAP.items():
+            self.low_state.motor_state[dds_i].q = self.mj_data.sensordata[act]
+            self.low_state.motor_state[dds_i].dq = self.mj_data.sensordata[act + mj_model.nu]
+            self.low_state.motor_state[dds_i].tau_est = self.mj_data.sensordata[act + 2 * mj_model.nu]
         self.low_state_puber.Write(self.low_state)
+
+
+def make_hand_bridges():
+    if args.hand == "dex3":
+        assert mj_model.nu == N_BODY_ACT + 14, f"expected {N_BODY_ACT} body + 14 hand actuators, got {mj_model.nu}"
+        return [HandBridge(mj_model, mj_data, "left", N_BODY_ACT), HandBridge(mj_model, mj_data, "right", N_BODY_ACT + 7)]
+    bridges = []
+    for side in ("left", "right"):
+        if args.hand == "dex1":
+            acts = [actuator_id(f"{side}_dex1_finger_joint_{k}") for k in (1, 2)]
+            bridges.append(Dex1Bridge(mj_model, mj_data, side, acts))
+        elif args.hand == "inspire_ftp":
+            acts = [actuator_id(f"{side}_{n}_joint") for n in INSPIRE_ORDER]
+            bridges.append(InspireFTPBridge(mj_model, mj_data, side, acts))
+        elif args.hand == "brainco":
+            acts = [actuator_id(f"{side}_{n}_joint") for n in BRAINCO_ORDER]
+            bridges.append(BrainCoBridge(mj_model, mj_data, side, acts))
+    return bridges
 
 
 def simulation_thread():
     ChannelFactoryInitialize(DOMAIN_ID, INTERFACE)
     body_bridge = BodyBridge29(mj_model, mj_data)
-    left_hand = HandBridge(mj_model, mj_data, "left", LEFT_HAND_OFFSET)
-    right_hand = HandBridge(mj_model, mj_data, "right", RIGHT_HAND_OFFSET)
+    hand_bridges = make_hand_bridges()
 
     while viewer.is_running():
         step_start = time.perf_counter()
@@ -98,8 +143,8 @@ def simulation_thread():
             mj_data.xfrc_applied[band_attached_link, :3] = elastic_band.Advance(
                 mj_data.qpos[:3], mj_data.qvel[:3]
             )
-        left_hand.apply_ctrl()
-        right_hand.apply_ctrl()
+        for hand in hand_bridges:
+            hand.apply_ctrl()
         mujoco.mj_step(mj_model, mj_data)
         locker.release()
 
