@@ -172,7 +172,14 @@ class Dex1Bridge(_JointPdHand):
     ONE motor per gripper (cmds[0].q). q is the motor angle in rad, 0 = closed (calibrated
     closed), up to ~5.4 rad = fully open (xr_teleoperate's mapped range). The sim model has two
     prismatic fingers (finger_joint_1/2); both move 0 .. +upper limit symmetrically.
-    Gains: N/m and N*s/m on the finger slides (our choice)."""
+
+    Like Unitree's dex1_1_service (main.cpp), the command's kp/kd/dq/tau are honoured:
+        tau_motor = tau + kp*(q_des - q) + kd*(dq_des - dq)        [motor side, rad]
+    The motor torque is turned into a force on each slide through the transmission
+    r = finger travel / motor travel (m/rad): one motor moves both fingers, so F = tau_motor / (2 r).
+    That makes the real gains stiff for these light fingers, so kd is capped to what the physics
+    timestep can integrate stably (c*dt/m <= 0.5) and the force to the actuator range. A command with
+    kp = kd = 0 falls back to our own PD gains kp/kd below (N/m and N*s/m on the slides)."""
 
     kp = 300.0
     kd = 10.0
@@ -182,7 +189,13 @@ class Dex1Bridge(_JointPdHand):
         super().__init__(mj_model, mj_data, actuator_indices, f"dex1_{side}_state")
         assert len(self.act) == 2
         self.hi_open = float(self.hi.min())  # shared opening per finger (m)
-        self.last_cmd = None
+        self.cmd = None
+        self.r = self.hi_open / self.Q_OPEN  # finger travel per rad of motor
+        # largest damping force coefficient (N*s/m) the explicit integration keeps stable
+        joint = mj_model.actuator_trnid[self.act[0], 0]
+        mass = mj_model.body_mass[mj_model.jnt_bodyid[joint]] + mj_model.dof_armature[mj_model.jnt_dofadr[joint]]
+        self.kd_max = 0.5 * mass / mj_model.opt.timestep * 2 * self.r ** 2  # as a motor-side kd
+        self.f_max = float(mj_model.actuator_ctrlrange[self.act[0], 1])
         self.state_puber = ChannelPublisher(f"rt/dex1/{side}/state", MotorStates_)
         self.state_puber.Init()
         self.cmd_suber = ChannelSubscriber(f"rt/dex1/{side}/cmd", MotorCmds_)
@@ -191,8 +204,23 @@ class Dex1Bridge(_JointPdHand):
 
     def _on_cmd(self, msg):
         if msg.cmds:
-            frac = float(np.clip(msg.cmds[0].q / self.Q_OPEN, 0.0, 1.0))
-            self.target = np.full(2, frac * self.hi_open)
+            self.cmd = msg.cmds[0]
+            frac = float(np.clip(self.cmd.q / self.Q_OPEN, 0.0, 1.0))
+            self.target = np.full(2, frac * self.hi_open)  # used by the fallback PD
+
+    def apply_ctrl(self):
+        c = self.cmd
+        if c is None:
+            return
+        if c.kp == 0.0 and c.kd == 0.0:
+            return super().apply_ctrl()
+        q_motor = float(self.q().mean()) / self.r
+        dq_motor = float(self.dq().mean()) / self.r
+        q_des = float(np.clip(c.q, 0.0, self.Q_OPEN))
+        tau_motor = c.tau + c.kp * (q_des - q_motor) + min(c.kd, self.kd_max) * (c.dq - dq_motor)
+        force = float(np.clip(tau_motor / (2 * self.r), -self.f_max, self.f_max))
+        for a in self.act:
+            self.d.ctrl[a] = force
 
     def _publish_state(self):
         frac = float(np.clip(self.q().mean() / self.hi_open, 0.0, 1.0))
@@ -274,3 +302,38 @@ class InspireFTPBridge(_JointPdHand):
         self.state_puber.Write(inspire_hand_state(
             pos_act=angle, angle_act=angle, force_act=[0] * 6, current=[0] * 6,
             err=[0] * 6, status=[0] * 6, temperature=[0] * 6))
+
+
+class InspireDFXBridge(_JointPdHand):
+    """Inspire DFX hand (both hands on ONE topic): rt/inspire/cmd and rt/inspire/state,
+    unitree_go MotorCmds_/MotorStates_, 12 motors: right hand 0-5, left hand 6-11, each in the
+    order [pinky, ring, middle, index, thumb-bend, thumb-rotation]. Only q is used, normalised
+    to [0,1] with 0 = closed and 1 = open (per Unitree's H1HandController example).
+    `actuator_indices` must be the 12 actuators in that order (right hand first)."""
+
+    kp = 8.0
+    kd = 0.4
+
+    def __init__(self, mj_model, mj_data, actuator_indices):
+        super().__init__(mj_model, mj_data, actuator_indices, "inspire_dfx_state")
+        assert len(self.act) == 12
+        self.state_puber = ChannelPublisher("rt/inspire/state", MotorStates_)
+        self.state_puber.Init()
+        self.cmd_suber = ChannelSubscriber("rt/inspire/cmd", MotorCmds_)
+        self.cmd_suber.Init(self._on_cmd, 10)
+        self.start()
+
+    def _on_cmd(self, msg):
+        if len(msg.cmds) >= 12:
+            openness = np.clip([c.q for c in msg.cmds[:12]], 0.0, 1.0)
+            self.target = self.lo + (1.0 - openness) * (self.hi - self.lo)
+
+    def _publish_state(self):
+        openness = 1.0 - np.clip((self.q() - self.lo) / (self.hi - self.lo), 0.0, 1.0)
+        states = []
+        for k in range(12):
+            ms = unitree_go_msg_dds__MotorState_()
+            ms.mode = 1
+            ms.q = float(openness[k])
+            states.append(ms)
+        self.state_puber.Write(MotorStates_(states))

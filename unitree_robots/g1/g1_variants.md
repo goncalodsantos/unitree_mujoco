@@ -14,6 +14,7 @@ rubber hand's mass is not counted on top of the new hand.
 |---|---|---|---|
 | `g1_29dof_dex1.xml` | `g1_description/g1_29dof_mode_15_with_dex1_1.urdf` | 29 | 4 (2 prismatic fingers per hand) |
 | `g1_29dof_inspire_ftp.xml` | `g1_description/g1_29dof_rev_1_0_with_inspire_hand_FTP.urdf` | 29 | 12 (6 per hand; the rest are mimic joints) |
+| `g1_29dof_inspire_dfx.xml` | `g1_description/g1_29dof_rev_1_0_with_inspire_hand_DFQ.urdf` (xr_teleoperate also uses this geometry for the DFX; thumb bend limited to 0..0.5 rad like there) | 29 | 12 (6 per hand; the rest are mimic joints) |
 | `g1_29dof_brainco.xml` | `g1_with_brainco_hand/g1_29dof_mode_15_brainco_hand.urdf` | 29 | 12 (6 per hand; the rest are mimic joints) |
 
 Actuator order: body in `LowCmd_` order (`left_hip_pitch` ... `right_wrist_yaw`), then left hand, then
