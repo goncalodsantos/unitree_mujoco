@@ -92,7 +92,7 @@ class BodyBridge29:
         self.low_cmd_suber = ChannelSubscriber("rt/lowcmd", LowCmd_)
         self.low_cmd_suber.Init(self.LowCmdHandler, 10)
         # See g1_hands_bridge.py for why this doesn't use mj_model.opt.timestep
-        # (0.0004s / 2500Hz) directly - too many high-rate RecurrentThreads
+        # (0.001s / 1000Hz) directly - too many high-rate RecurrentThreads
         # starve the CPU enough that .Start() itself stalls.
         self.state_thread = RecurrentThread(
             interval=0.01, target=self.PublishLowState, name="g1_hands_lowstate"

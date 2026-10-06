@@ -33,8 +33,8 @@ NUM_PRESS_SENSOR = 9
 # Dex3 gains are much smaller than the arm's, matching Unitree's own
 # example/g1/dex3/g1_dex3_example.cpp (kp~0.5-1.5, kd~0.1). Empirically
 # (see g1_29dof_hand14 physics tests) these tiny/low-inertia finger joints
-# also need a finer simulation timestep (see scene_29dof_hand14_fixed_base.xml)
-# to stay stable even at these gains - the real robot's embedded finger
+# also need a finer simulation timestep than the body-only scene (1 ms, see
+# scene_29dof_hand14_fixed_base.xml) to stay stable even at these gains - the real robot's embedded finger
 # control loop runs much faster than our DDS command rate.
 DEFAULT_HAND_KP = 10.0
 DEFAULT_HAND_KD = 0.5
@@ -61,8 +61,8 @@ class HandBridge:
         self.cmd_suber = ChannelSubscriber(f"rt/dex3/{side}/cmd", HandCmd_)
         self.cmd_suber.Init(self._on_cmd, 10)
         # Publish state at a fixed, modest rate (100Hz) independent of the
-        # physics timestep - the hand model needs a very fine timestep
-        # (0.0004s = 2500Hz) for numerical stability, and firing a
+        # physics timestep - the hand model needs a fine timestep
+        # (0.001s = 1000Hz) for numerical stability, and firing a
         # RecurrentThread at that rate for state publishing (x2 hands, on
         # top of the physics loop itself already running there) starves
         # the CPU badly enough that RecurrentThread.Start() effectively

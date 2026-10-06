@@ -1,7 +1,7 @@
 # G1 variants generated from Unitree's real descriptions
 
 Built by `tools/build_g1_variants.py` (re-run to regenerate). Each `scene_*_fixed_base.xml`
-includes its model, sets `timestep=0.0004` (light finger links) and welds the pelvis to the world;
+includes its model, sets `timestep=0.001` (light finger links) and welds the pelvis to the world;
 the same scene without `_fixed_base` leaves the pelvis free.
 
 **All variants share the same body: `g1_29dof.xml`** (geometry, masses, joint classes, actuators, IMU).
