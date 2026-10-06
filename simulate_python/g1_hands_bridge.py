@@ -178,14 +178,19 @@ class Dex1Bridge(_JointPdHand):
     Like Unitree's dex1_1_service (main.cpp), the command's kp/kd/dq/tau are honoured:
         tau_motor = tau + kp*(q_des - q) + kd*(dq_des - dq)        [motor side, rad]
     The motor torque is turned into a force on each slide through the transmission
-    r = finger travel / motor travel (m/rad): one motor moves both fingers, so F = tau_motor / (2 r).
-    That makes the real gains stiff for these light fingers, so kd is capped to what the physics
-    timestep can integrate stably (c*dt/m <= 0.5) and the force to the actuator range. A command with
-    kp = kd = 0 falls back to our own PD gains kp/kd below (N/m and N*s/m on the slides)."""
+    r = finger travel / motor travel (m/rad): one motor moves both fingers, so F = tau_motor / (2 r),
+    i.e. a spring k = kp / (2 r^2) and a damper c = kd / (2 r^2) on each finger.
+    The real gains (kp 5, kd 0.05 in xr_teleoperate) give k ~ 37000 N/m, far too stiff for 0.09 kg fingers
+    integrated explicitly at 1 ms (the force saturated and the fingers chattered). So the stiffness is capped to
+    a natural frequency of 0.3/dt rad/s, the damping is raised to critical damping and limited to what the
+    step can integrate (c*dt/m <= 0.5), and the force is limited to the actuator range. With these limits the
+    fingers follow a 30 Hz command stream within a fraction of a millimetre without trembling.
+    A command with kp = kd = 0 falls back to our own PD gains kp/kd below (N/m and N*s/m on the slides)."""
 
     kp = 300.0
     kd = 10.0
     Q_OPEN = 5.4
+    OMEGA_DT = 0.3  # largest natural frequency of the simulated spring, as a fraction of 1/dt
 
     def __init__(self, mj_model, mj_data, side, actuator_indices):
         super().__init__(mj_model, mj_data, actuator_indices, f"dex1_{side}_state")
@@ -195,10 +200,11 @@ class Dex1Bridge(_JointPdHand):
         self.stroke = self.hi_open - self.lo_closed  # travel of each finger
         self.cmd = None
         self.r = self.stroke / self.Q_OPEN  # finger travel per rad of motor
-        # largest damping force coefficient (N*s/m) the explicit integration keeps stable
         joint = mj_model.actuator_trnid[self.act[0], 0]
-        mass = mj_model.body_mass[mj_model.jnt_bodyid[joint]] + mj_model.dof_armature[mj_model.jnt_dofadr[joint]]
-        self.kd_max = 0.5 * mass / mj_model.opt.timestep * 2 * self.r ** 2  # as a motor-side kd
+        self.mass = float(mj_model.body_mass[mj_model.jnt_bodyid[joint]] + mj_model.dof_armature[mj_model.jnt_dofadr[joint]])
+        dt = mj_model.opt.timestep
+        self.k_max = self.mass * (self.OMEGA_DT / dt) ** 2  # N/m the explicit integration keeps stable
+        self.c_max = 0.5 * self.mass / dt                    # N*s/m (c*dt/m <= 0.5)
         self.f_max = float(mj_model.actuator_ctrlrange[self.act[0], 1])
         self.state_puber = ChannelPublisher(f"rt/dex1/{side}/state", MotorStates_)
         self.state_puber.Init()
@@ -218,13 +224,15 @@ class Dex1Bridge(_JointPdHand):
             return
         if c.kp == 0.0 and c.kd == 0.0:
             return super().apply_ctrl()
-        q_motor = (float(self.q().mean()) - self.lo_closed) / self.r
-        dq_motor = float(self.dq().mean()) / self.r
-        q_des = float(np.clip(c.q, 0.0, self.Q_OPEN))
-        tau_motor = c.tau + c.kp * (q_des - q_motor) + min(c.kd, self.kd_max) * (c.dq - dq_motor)
-        force = float(np.clip(tau_motor / (2 * self.r), -self.f_max, self.f_max))
-        for a in self.act:
-            self.d.ctrl[a] = force
+        x_des = self.lo_closed + float(np.clip(c.q, 0.0, self.Q_OPEN)) * self.r
+        k = min(c.kp / (2 * self.r ** 2), self.k_max)
+        damp = min(max(c.kd / (2 * self.r ** 2), 2.0 * np.sqrt(k * self.mass)), self.c_max)
+        # One PD per finger. Controlling only the mean of the two fingers leaves their difference without any
+        # spring, and the slightest asymmetry (contact, wrist acceleration) sends one finger to each extreme.
+        # On the real gripper a rail couples the two jaws; here each finger is held to the same target.
+        for a, x, dx in zip(self.act, self.q(), self.dq()):
+            force = c.tau / (2 * self.r) + k * (x_des - float(x)) + damp * (c.dq * self.r - float(dx))
+            self.d.ctrl[a] = float(np.clip(force, -self.f_max, self.f_max))
 
     def _publish_state(self):
         frac = float(np.clip((self.q().mean() - self.lo_closed) / self.stroke, 0.0, 1.0))

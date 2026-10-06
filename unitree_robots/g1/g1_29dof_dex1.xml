@@ -216,13 +216,13 @@
                               <geom pos="0 0 0" quat="1 0 0 0" type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="Dex1_base_link"/>
                               <body name="left_dex1_finger_link_1">
                                 <inertial pos="0.073453 -0.011173 0.0086355" quat="0.473767 0.495457 -0.502004 0.527313" mass="0.086783" diaginertia="3.60512e-05 2.55693e-05 1.45244e-05"/>
-                                <joint name="left_dex1_finger_joint_1" type="slide" range="-0.02 0.0245" actuatorfrcrange="-20 20" armature="0.001" damping="0.01" axis="0 -1 0"/>
+                                <joint name="left_dex1_finger_joint_1" type="slide" solreflimit="0.004" range="-0.02 0.0245" actuatorfrcrange="-20 20" armature="0.001" damping="0.01" axis="0 -1 0"/>
                                 <geom pos="0 0 0" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.41176 0.41176 0.41176 1" density="0" mesh="Dex1_finger_link_1"/>
                                 <geom pos="0 0 0" quat="1 0 0 0" type="mesh" rgba="0.41176 0.41176 0.41176 1" mesh="dex1_col_1"/>
                               </body>
                               <body name="left_dex1_finger_link_2">
                                 <inertial pos="0.073453 0.011173 -0.0086355" quat="0.527313 0.502004 -0.495457 0.473767" mass="0.086783" diaginertia="3.60512e-05 2.55693e-05 1.45244e-05"/>
-                                <joint name="left_dex1_finger_joint_2" type="slide" range="-0.02 0.0245" actuatorfrcrange="-20 20" armature="0.001" damping="0.01" axis="0 1 0"/>
+                                <joint name="left_dex1_finger_joint_2" type="slide" solreflimit="0.004" range="-0.02 0.0245" actuatorfrcrange="-20 20" armature="0.001" damping="0.01" axis="0 1 0"/>
                                 <geom pos="0 0 0" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.89804 0.91765 0.92941 1" density="0" mesh="Dex1_finger_link_2"/>
                                 <geom pos="0 0 0" quat="1 0 0 0" type="mesh" rgba="0.89804 0.91765 0.92941 1" mesh="dex1_col_2"/>
                               </body>
@@ -277,13 +277,13 @@
                               <geom pos="0 0 0" quat="1 0 0 0" type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="right_Dex1_base_link"/>
                               <body name="right_dex1_finger_link_1">
                                 <inertial pos="0.073453 -0.011173 0.0086355" quat="0.473767 0.495457 -0.502004 0.527313" mass="0.086783" diaginertia="3.60512e-05 2.55693e-05 1.45244e-05"/>
-                                <joint name="right_dex1_finger_joint_1" type="slide" range="-0.02 0.0245" actuatorfrcrange="-20 20" armature="0.001" damping="0.01" axis="0 -1 0"/>
+                                <joint name="right_dex1_finger_joint_1" type="slide" solreflimit="0.004" range="-0.02 0.0245" actuatorfrcrange="-20 20" armature="0.001" damping="0.01" axis="0 -1 0"/>
                                 <geom pos="0 0 0" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.41176 0.41176 0.41176 1" density="0" mesh="right_Dex1_finger_link_1"/>
                                 <geom pos="0 0 0" quat="1 0 0 0" type="mesh" rgba="0.41176 0.41176 0.41176 1" mesh="right_dex1_col_1"/>
                               </body>
                               <body name="right_dex1_finger_link_2">
                                 <inertial pos="0.073453 0.011173 -0.0086355" quat="0.527313 0.502004 -0.495457 0.473767" mass="0.086783" diaginertia="3.60512e-05 2.55693e-05 1.45244e-05"/>
-                                <joint name="right_dex1_finger_joint_2" type="slide" range="-0.02 0.0245" actuatorfrcrange="-20 20" armature="0.001" damping="0.01" axis="0 1 0"/>
+                                <joint name="right_dex1_finger_joint_2" type="slide" solreflimit="0.004" range="-0.02 0.0245" actuatorfrcrange="-20 20" armature="0.001" damping="0.01" axis="0 1 0"/>
                                 <geom pos="0 0 0" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.89804 0.91765 0.92941 1" density="0" mesh="right_Dex1_finger_link_2"/>
                                 <geom pos="0 0 0" quat="1 0 0 0" type="mesh" rgba="0.89804 0.91765 0.92941 1" mesh="right_dex1_col_2"/>
                               </body>
