@@ -53,6 +53,7 @@ BRAINCO_ORDER = ["thumb_proximal", "thumb_metacarpal", "index_proximal", "middle
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument("--hand", choices=list(HANDS), default="dex3")
 parser.add_argument("--domain-id", type=int, default=DOMAIN_ID, help="DDS domain (change it to run a second sim next to another one)")
+parser.add_argument("--no-band", action="store_true", help="start with the elastic band off (it pulls the torso toward a point 3 m above the world; toggle it with key 9). Use it when measuring tracking errors")
 parser.add_argument("--free-base", action="store_true", help="do not weld the pelvis to the world (the robot has no balance controller and will fall; use the elastic band, key 9)")
 args = parser.parse_args()
 
@@ -74,6 +75,7 @@ def actuator_id(name: str) -> int:
 
 
 elastic_band = ElasticBand()
+elastic_band.enable = not args.no_band
 band_attached_link = mj_model.body("torso_link").id
 viewer = mujoco.viewer.launch_passive(mj_model, mj_data, key_callback=elastic_band.MujuocoKeyCallback)
 
@@ -151,6 +153,8 @@ def simulation_thread():
             mj_data.xfrc_applied[band_attached_link, :3] = elastic_band.Advance(
                 mj_data.qpos[:3], mj_data.qvel[:3]
             )
+        else:
+            mj_data.xfrc_applied[band_attached_link, :3] = 0.0  # no stale force after toggling the band off
         for hand in hand_bridges:
             hand.apply_ctrl()
         mujoco.mj_step(mj_model, mj_data)
