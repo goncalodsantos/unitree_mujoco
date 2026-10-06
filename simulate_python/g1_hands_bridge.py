@@ -170,8 +170,10 @@ class _JointPdHand:
 class Dex1Bridge(_JointPdHand):
     """Dex1-1 gripper: rt/dex1/{left,right}/cmd|state, unitree_go MotorCmds_/MotorStates_,
     ONE motor per gripper (cmds[0].q). q is the motor angle in rad, 0 = closed (calibrated
-    closed), up to ~5.4 rad = fully open (xr_teleoperate's mapped range). The sim model has two
-    prismatic fingers (finger_joint_1/2); both move 0 .. +upper limit symmetrically.
+    closed), up to ~5.4 rad = fully open (xr_teleoperate's mapped range), which opens the jaws by about
+    9 cm. The sim model has two prismatic fingers (finger_joint_1/2); both go from the joint's lower limit
+    (-0.02 m, jaws closed: 0.6 cm apart) to its upper limit (+0.0245 m, jaws 9.5 cm apart) symmetrically,
+    measured with the collision meshes.
 
     Like Unitree's dex1_1_service (main.cpp), the command's kp/kd/dq/tau are honoured:
         tau_motor = tau + kp*(q_des - q) + kd*(dq_des - dq)        [motor side, rad]
@@ -188,9 +190,11 @@ class Dex1Bridge(_JointPdHand):
     def __init__(self, mj_model, mj_data, side, actuator_indices):
         super().__init__(mj_model, mj_data, actuator_indices, f"dex1_{side}_state")
         assert len(self.act) == 2
-        self.hi_open = float(self.hi.min())  # shared opening per finger (m)
+        self.lo_closed = float(self.lo.max())  # joint value with the jaws closed (m)
+        self.hi_open = float(self.hi.min())    # joint value with the jaws fully open (m)
+        self.stroke = self.hi_open - self.lo_closed  # travel of each finger
         self.cmd = None
-        self.r = self.hi_open / self.Q_OPEN  # finger travel per rad of motor
+        self.r = self.stroke / self.Q_OPEN  # finger travel per rad of motor
         # largest damping force coefficient (N*s/m) the explicit integration keeps stable
         joint = mj_model.actuator_trnid[self.act[0], 0]
         mass = mj_model.body_mass[mj_model.jnt_bodyid[joint]] + mj_model.dof_armature[mj_model.jnt_dofadr[joint]]
@@ -206,7 +210,7 @@ class Dex1Bridge(_JointPdHand):
         if msg.cmds:
             self.cmd = msg.cmds[0]
             frac = float(np.clip(self.cmd.q / self.Q_OPEN, 0.0, 1.0))
-            self.target = np.full(2, frac * self.hi_open)  # used by the fallback PD
+            self.target = np.full(2, self.lo_closed + frac * self.stroke)  # used by the fallback PD
 
     def apply_ctrl(self):
         c = self.cmd
@@ -214,7 +218,7 @@ class Dex1Bridge(_JointPdHand):
             return
         if c.kp == 0.0 and c.kd == 0.0:
             return super().apply_ctrl()
-        q_motor = float(self.q().mean()) / self.r
+        q_motor = (float(self.q().mean()) - self.lo_closed) / self.r
         dq_motor = float(self.dq().mean()) / self.r
         q_des = float(np.clip(c.q, 0.0, self.Q_OPEN))
         tau_motor = c.tau + c.kp * (q_des - q_motor) + min(c.kd, self.kd_max) * (c.dq - dq_motor)
@@ -223,11 +227,11 @@ class Dex1Bridge(_JointPdHand):
             self.d.ctrl[a] = force
 
     def _publish_state(self):
-        frac = float(np.clip(self.q().mean() / self.hi_open, 0.0, 1.0))
+        frac = float(np.clip((self.q().mean() - self.lo_closed) / self.stroke, 0.0, 1.0))
         ms = unitree_go_msg_dds__MotorState_()
         ms.mode = 1
         ms.q = frac * self.Q_OPEN
-        ms.dq = float(self.dq().mean() / self.hi_open * self.Q_OPEN)
+        ms.dq = float(self.dq().mean() / self.stroke * self.Q_OPEN)
         self.state_puber.Write(MotorStates_([ms]))
 
 
