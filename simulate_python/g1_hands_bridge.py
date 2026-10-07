@@ -36,8 +36,8 @@ NUM_PRESS_SENSOR = 9
 # also need a finer simulation timestep than the body-only scene (1 ms, see
 # scene_29dof_hand14_fixed_base.xml) to stay stable even at these gains - the real robot's embedded finger
 # control loop runs much faster than our DDS command rate.
-DEFAULT_HAND_KP = 10.0
-DEFAULT_HAND_KD = 0.5
+DEFAULT_HAND_KP = 8.0
+DEFAULT_HAND_KD = 0.2
 
 
 class HandBridge:
@@ -132,8 +132,8 @@ from inspire_idl import inspire_hand_ctrl, inspire_hand_state
 class _JointPdHand:
     """A group of simulated actuators held by a joint-space PD toward a target vector."""
 
-    kp = 10.0
-    kd = 0.5
+    kp = 8.0
+    kd = 0.2
 
     def __init__(self, mj_model, mj_data, actuator_indices, publish_name):
         self.m, self.d = mj_model, mj_data
@@ -249,8 +249,8 @@ class BrainCoBridge(_JointPdHand):
     (0 = open, 1 = closed) and dq (speed) normalised to [0,1] (ignored here).
     `actuator_indices` must follow that order."""
 
-    kp = 2.0
-    kd = 0.1
+    kp = 8.0
+    kd = 0.2
 
     def __init__(self, mj_model, mj_data, side, actuator_indices):
         super().__init__(mj_model, mj_data, actuator_indices, f"brainco_{side}_state")
@@ -287,7 +287,7 @@ class InspireFTPBridge(_JointPdHand):
     `actuator_indices` must follow that order."""
 
     kp = 8.0
-    kd = 0.4
+    kd = 0.2
 
     def __init__(self, mj_model, mj_data, side, actuator_indices):
         super().__init__(mj_model, mj_data, actuator_indices, f"inspire_{side}_state")
@@ -324,7 +324,7 @@ class InspireDFXBridge(_JointPdHand):
     `actuator_indices` must be the 12 actuators in that order (right hand first)."""
 
     kp = 8.0
-    kd = 0.4
+    kd = 0.2
 
     def __init__(self, mj_model, mj_data, actuator_indices):
         super().__init__(mj_model, mj_data, actuator_indices, "inspire_dfx_state")
