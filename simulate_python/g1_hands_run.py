@@ -1,19 +1,15 @@
 """
-Run the G1 sim with a dexterous hand/gripper attached, fixed pelvis.
+Run the G1 sim with a dexterous hand/gripper attached (pelvis welded to the world by default).
 
-- Body (29 motors) talks rt/lowcmd / rt/lowstate exactly like the plain
-unitree_mujoco.py entry point. 
-- The Hands talk their own DDS protocol, see
-g1_hands_bridge.py (Dex3 and why it can't share LowCmd_) for details.
+- Body (29 motors): rt/lowcmd / rt/lowstate, like the plain unitree_mujoco.py entry point.
+- Hands: their own DDS protocols, see g1_hands_bridge.py.
 
     conda activate g1
     cd third_party/unitree_mujoco/simulate_python
-    python g1_hands_run.py                      # Dex3, 43 actuators (default)
-    python g1_hands_run.py --hand dex1          # Dex1-1 gripper
-    python g1_hands_run.py --hand inspire_ftp   # Inspire FTP
-    python g1_hands_run.py --hand inspire_dfx   # Inspire DFX (Unitree's DFQ model, as in xr_teleoperate)
-    python g1_hands_run.py --hand brainco       # BrainCo
-    python g1_hands_run.py --hand dex1 --free-base   # pelvis not welded
+    python g1_hands_run.py                          # Dex3, 43 actuators (default)
+    python g1_hands_run.py --hand dex1              # also: inspire_ftp, inspire_dfx, brainco
+    python g1_hands_run.py --hand dex1 --free-base  # pelvis not welded
+    python g1_hands_run.py --hand dex1 --no-band    # elastic band off
 """
 
 import argparse
@@ -93,9 +89,7 @@ class BodyBridge29:
         self.low_state_puber.Init()
         self.low_cmd_suber = ChannelSubscriber("rt/lowcmd", LowCmd_)
         self.low_cmd_suber.Init(self.LowCmdHandler, 10)
-        # See g1_hands_bridge.py for why this doesn't use mj_model.opt.timestep
-        # (0.001s / 1000Hz) directly - too many high-rate RecurrentThreads
-        # starve the CPU enough that .Start() itself stalls.
+        # 100 Hz, not the 1 kHz physics rate (see g1_hands_bridge.py)
         self.state_thread = RecurrentThread(
             interval=0.01, target=self.PublishLowState, name="g1_hands_lowstate"
         )
