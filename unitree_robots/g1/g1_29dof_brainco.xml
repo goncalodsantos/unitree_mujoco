@@ -57,7 +57,7 @@
     <mesh name="right_wrist_yaw_link" file="right_wrist_yaw_link.STL"/>
     <mesh name="right_rubber_hand" file="right_rubber_hand.STL"/>
     <mesh name="left_base2_link" file="brainco/left_base2_link.STL"/>
-    <mesh name="left_base_link" file="brainco/left_base_link.STL"/>
+    <mesh name="left_base_link" content_type="model/stl" file="brainco/left_base_link.STL"/>
     <mesh name="left_thumb_metacarpal_Link" file="brainco/left_thumb_metacarpal_Link.STL"/>
     <mesh name="left_thumb_proximal_Link" file="brainco/left_thumb_proximal_Link.STL"/>
     <mesh name="left_thumb_distal_Link" file="brainco/left_thumb_distal_Link.STL"/>
@@ -69,29 +69,29 @@
     <mesh name="left_middle_distal_Link" file="brainco/left_middle_distal_Link.STL"/>
     <mesh name="left_middle_tip_Link" file="brainco/left_middle_tip_Link.STL"/>
     <mesh name="left_ring_proximal_Link" file="brainco/left_ring_proximal_Link.STL"/>
-    <mesh name="left_ring_distal_Link" file="brainco/left_ring_distal_Link.STL"/>
+    <mesh name="left_ring_distal_Link" content_type="model/stl" file="brainco/left_ring_distal_Link.STL"/>
     <mesh name="left_ring_tip_Link" file="brainco/left_ring_tip_Link.STL"/>
     <mesh name="left_pinky_proximal_Link" file="brainco/left_pinky_proximal_Link.STL"/>
-    <mesh name="left_pinky_distal_Link" file="brainco/left_pinky_distal_Link.STL"/>
+    <mesh name="left_pinky_distal_Link" content_type="model/stl" file="brainco/left_pinky_distal_Link.STL"/>
     <mesh name="left_pinky_tip_Link" file="brainco/left_pinky_tip_Link.STL"/>
-    <mesh name="right_base2_link" file="brainco/right_base2_link.STL"/>
-    <mesh name="right_base_link" file="brainco/right_base_link.STL"/>
-    <mesh name="right_thumb_metacarpal_link" file="brainco/right_thumb_metacarpal_link.STL"/>
-    <mesh name="right_thumb_proximal_link" file="brainco/right_thumb_proximal_link.STL"/>
-    <mesh name="right_thumb_distal_link" file="brainco/right_thumb_distal_link.STL"/>
-    <mesh name="right_thumb_tip" file="brainco/right_thumb_tip.STL"/>
-    <mesh name="right_index_proximal_link" file="brainco/right_index_proximal_link.STL"/>
-    <mesh name="right_index_distal_link" file="brainco/right_index_distal_link.STL"/>
-    <mesh name="right_index_tip" file="brainco/right_index_tip.STL"/>
-    <mesh name="right_middle_proximal_link" file="brainco/right_middle_proximal_link.STL"/>
-    <mesh name="right_middle_distal_link" file="brainco/right_middle_distal_link.STL"/>
-    <mesh name="right_middle_tip" file="brainco/right_middle_tip.STL"/>
-    <mesh name="right_ring_proximal_link" file="brainco/right_ring_proximal_link.STL"/>
-    <mesh name="right_ring_distal_link" file="brainco/right_ring_distal_link.STL"/>
-    <mesh name="right_ring_tip" file="brainco/right_ring_tip.STL"/>
-    <mesh name="right_pinky_proximal_link" file="brainco/right_pinky_proximal_link.STL"/>
-    <mesh name="right_pinky_distal_link" file="brainco/right_pinky_distal_link.STL"/>
-    <mesh name="right_pinky_tip" file="brainco/right_pinky_tip.STL"/>
+    <mesh name="right_base2_link" content_type="model/stl" file="brainco/right_base2_link.STL"/>
+    <mesh name="right_base_link" content_type="model/stl" file="brainco/right_base_link.STL"/>
+    <mesh name="right_thumb_metacarpal_link" content_type="model/stl" file="brainco/right_thumb_metacarpal_link.STL"/>
+    <mesh name="right_thumb_proximal_link" content_type="model/stl" file="brainco/right_thumb_proximal_link.STL"/>
+    <mesh name="right_thumb_distal_link" content_type="model/stl" file="brainco/right_thumb_distal_link.STL"/>
+    <mesh name="right_thumb_tip" content_type="model/stl" file="brainco/right_thumb_tip.STL"/>
+    <mesh name="right_index_proximal_link" content_type="model/stl" file="brainco/right_index_proximal_link.STL"/>
+    <mesh name="right_index_distal_link" content_type="model/stl" file="brainco/right_index_distal_link.STL"/>
+    <mesh name="right_index_tip" content_type="model/stl" file="brainco/right_index_tip.STL"/>
+    <mesh name="right_middle_proximal_link" content_type="model/stl" file="brainco/right_middle_proximal_link.STL"/>
+    <mesh name="right_middle_distal_link" content_type="model/stl" file="brainco/right_middle_distal_link.STL"/>
+    <mesh name="right_middle_tip" content_type="model/stl" file="brainco/right_middle_tip.STL"/>
+    <mesh name="right_ring_proximal_link" content_type="model/stl" file="brainco/right_ring_proximal_link.STL"/>
+    <mesh name="right_ring_distal_link" content_type="model/stl" file="brainco/right_ring_distal_link.STL"/>
+    <mesh name="right_ring_tip" content_type="model/stl" file="brainco/right_ring_tip.STL"/>
+    <mesh name="right_pinky_proximal_link" content_type="model/stl" file="brainco/right_pinky_proximal_link.STL"/>
+    <mesh name="right_pinky_distal_link" content_type="model/stl" file="brainco/right_pinky_distal_link.STL"/>
+    <mesh name="right_pinky_tip" content_type="model/stl" file="brainco/right_pinky_tip.STL"/>
   </asset>
 
   <worldbody>
@@ -647,11 +647,11 @@
     <jointactuatorfrc joint="right_ring_proximal_joint" name="right_ring_proximal_torque"/>
     <jointactuatorfrc joint="right_pinky_proximal_joint" name="right_pinky_proximal_torque"/>
     <framequat objtype="site" objname="imu" name="imu_quat"/>
+    <gyro site="imu" name="imu_gyro"/>
+    <accelerometer site="imu" name="imu_acc"/>
     <framepos objtype="site" objname="imu" name="frame_pos"/>
     <framelinvel objtype="site" objname="imu" name="frame_vel"/>
     <framequat objtype="site" objname="secondary_imu" name="secondary_imu_quat"/>
-    <gyro site="imu" name="imu_gyro"/>
-    <accelerometer site="imu" name="imu_acc"/>
     <gyro site="secondary_imu" name="secondary_imu_gyro" cutoff="34.9" noise="0.0005"/>
     <accelerometer site="secondary_imu" name="secondary_imu_acc" cutoff="157" noise="0.01"/>
   </sensor>

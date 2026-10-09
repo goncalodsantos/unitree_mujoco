@@ -21,7 +21,8 @@ import mujoco
 import mujoco.viewer
 
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelPublisher, ChannelSubscriber
-from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowState_
+from unitree_sdk2py.idl.default import unitree_go_msg_dds__SportModeState_, unitree_hg_msg_dds__LowState_
+from unitree_sdk2py.idl.unitree_go.msg.dds_ import SportModeState_
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
 from unitree_sdk2py.utils.thread import RecurrentThread
 
@@ -51,13 +52,22 @@ parser.add_argument("--hand", choices=list(HANDS), default="dex3")
 parser.add_argument("--domain-id", type=int, default=DOMAIN_ID, help="DDS domain (change it to run a second sim next to another one)")
 parser.add_argument("--no-band", action="store_true", help="start with the elastic band off (it pulls the torso toward a point 3 m above the world; toggle it with key 9). Use it when measuring tracking errors")
 parser.add_argument("--free-base", action="store_true", help="do not weld the pelvis to the world (the robot has no balance controller and will fall; use the elastic band, key 9)")
+parser.add_argument("--dt", type=float, help="physics step in seconds (default: the scene's, 0.001)")
+parser.add_argument("--stand", action="store_true", help="start in the standing pose of the balance policy and freeze the physics until the first rt/lowcmd arrives (use with --free-base and a balance controller)")
 args = parser.parse_args()
 
 locker = threading.Lock()
 
 scene = HANDS[args.hand].replace("_fixed_base", "") if args.free_base else HANDS[args.hand]
 mj_model = mujoco.MjModel.from_xml_path(ROBOTS_DIR + scene)
+if args.dt:
+    mj_model.opt.timestep = args.dt
 mj_data = mujoco.MjData(mj_model)
+if args.stand:  # legs and waist of the GR00T WBC policy's default pose (g1_teleop.control.wbc_legs.DEFAULT), pelvis just above the floor
+    mj_data.qpos[2] = 0.78
+    for i, angle in enumerate([-0.1, 0, 0, 0.3, -0.2, 0] * 2 + [0, 0, 0]):
+        mj_data.qpos[mj_model.jnt_qposadr[mj_model.actuator_trnid[i, 0]]] = angle
+    mujoco.mj_forward(mj_model, mj_data)
 
 # DDS motor index -> actuator index for the body (identity: the models list the 29 body motors first).
 BODY_MAP = {i: i for i in range(NUM_BODY_MOTOR)}
@@ -84,11 +94,18 @@ class BodyBridge29:
     def __init__(self, mj_model, mj_data):
         self.mj_model = mj_model
         self.mj_data = mj_data
+        self.got_cmd = False
         self.low_state = unitree_hg_msg_dds__LowState_()
         self.low_state_puber = ChannelPublisher("rt/lowstate", LowState_)
         self.low_state_puber.Init()
         self.low_cmd_suber = ChannelSubscriber("rt/lowcmd", LowCmd_)
         self.low_cmd_suber.Init(self.LowCmdHandler, 10)
+        # IMU of the pelvis, read by sensor name (the models list imu_quat, imu_gyro, imu_acc after the motor sensors)
+        self.imu_adr = {n: int(mj_model.sensor(n).adr[0]) for n in ("imu_quat", "imu_gyro", "imu_acc", "frame_pos", "frame_vel")}
+        # base position and velocity in the world, on the same topic and type as the official bridge
+        self.base_state = unitree_go_msg_dds__SportModeState_()
+        self.base_state_puber = ChannelPublisher("rt/sportmodestate", SportModeState_)
+        self.base_state_puber.Init()
         # 100 Hz, not the 1 kHz physics rate (see g1_hands_bridge.py)
         self.state_thread = RecurrentThread(
             interval=0.01, target=self.PublishLowState, name="g1_hands_lowstate"
@@ -96,6 +113,7 @@ class BodyBridge29:
         self.state_thread.Start()
 
     def LowCmdHandler(self, msg: LowCmd_):
+        self.got_cmd = True
         for dds_i, act in BODY_MAP.items():
             q = self.mj_data.sensordata[act]
             dq = self.mj_data.sensordata[act + mj_model.nu]
@@ -110,7 +128,17 @@ class BodyBridge29:
             self.low_state.motor_state[dds_i].q = self.mj_data.sensordata[act]
             self.low_state.motor_state[dds_i].dq = self.mj_data.sensordata[act + mj_model.nu]
             self.low_state.motor_state[dds_i].tau_est = self.mj_data.sensordata[act + 2 * mj_model.nu]
+        imu, sd = self.low_state.imu_state, self.mj_data.sensordata
+        for field, name, n in (("quaternion", "imu_quat", 4), ("gyroscope", "imu_gyro", 3), ("accelerometer", "imu_acc", 3)):
+            a = self.imu_adr[name]
+            for k in range(n):
+                getattr(imu, field)[k] = float(sd[a + k])
         self.low_state_puber.Write(self.low_state)
+        for field, name in (("position", "frame_pos"), ("velocity", "frame_vel")):
+            a = self.imu_adr[name]
+            for k in range(3):
+                getattr(self.base_state, field)[k] = float(sd[a + k])
+        self.base_state_puber.Write(self.base_state)
 
 
 def make_hand_bridges():
@@ -141,6 +169,9 @@ def simulation_thread():
 
     while viewer.is_running():
         step_start = time.perf_counter()
+        if args.stand and not body_bridge.got_cmd:  # wait for the controller, the robot stays where it was put
+            time.sleep(0.01)
+            continue
 
         locker.acquire()
         if elastic_band.enable:

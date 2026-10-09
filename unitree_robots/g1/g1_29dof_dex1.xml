@@ -439,11 +439,11 @@
     <jointactuatorfrc joint="right_dex1_finger_joint_1" name="right_dex1_finger_joint_1_torque"/>
     <jointactuatorfrc joint="right_dex1_finger_joint_2" name="right_dex1_finger_joint_2_torque"/>
     <framequat objtype="site" objname="imu" name="imu_quat"/>
+    <gyro site="imu" name="imu_gyro"/>
+    <accelerometer site="imu" name="imu_acc"/>
     <framepos objtype="site" objname="imu" name="frame_pos"/>
     <framelinvel objtype="site" objname="imu" name="frame_vel"/>
     <framequat objtype="site" objname="secondary_imu" name="secondary_imu_quat"/>
-    <gyro site="imu" name="imu_gyro"/>
-    <accelerometer site="imu" name="imu_acc"/>
     <gyro site="secondary_imu" name="secondary_imu_gyro" cutoff="34.9" noise="0.0005"/>
     <accelerometer site="secondary_imu" name="secondary_imu_acc" cutoff="157" noise="0.01"/>
   </sensor>
