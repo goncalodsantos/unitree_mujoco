@@ -13,7 +13,7 @@ rubber hand's mass is not counted on top of the new hand.
 | model | hand source (unitree_ros/robots) | body motors | hand motors |
 |---|---|---|---|
 | `g1_29dof_dex3.xml` | `g1_description/g1_29dof_with_hand_rev_1_0.urdf` (Dex3; thumb_1 range from Unitree's `.xml` of the same name, -0.724 rad, the URDF says -0.611) | 29 | 14 (7 per hand; order left thumb, middle, index / right thumb, index, middle, as in HandCmd_) |
-| `g1_29dof_dex1.xml` | `g1_description/g1_29dof_mode_15_with_dex1_1.urdf` | 29 | 4 (2 prismatic fingers per hand) |
+| `g1_29dof_dex1.xml` | `g1_description/g1_29dof_mode_15_with_dex1_1.urdf` | 29 | 2 (2 prismatic fingers per hand) |
 | `g1_29dof_inspire_ftp.xml` | `g1_description/g1_29dof_rev_1_0_with_inspire_hand_FTP.urdf` | 29 | 12 (6 per hand; the rest are mimic joints) |
 | `g1_29dof_inspire_dfx.xml` | `g1_description/g1_29dof_rev_1_0_with_inspire_hand_DFQ.urdf` (xr_teleoperate also uses this geometry for the DFX; thumb bend limited to 0..0.5 rad like there) | 29 | 12 (6 per hand; the rest are mimic joints) |
 | `g1_29dof_brainco.xml` | `g1_with_brainco_hand/g1_29dof_mode_15_brainco_hand.urdf` | 29 | 12 (6 per hand; the rest are mimic joints) |

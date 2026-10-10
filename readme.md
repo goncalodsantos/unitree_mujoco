@@ -134,6 +134,39 @@ The program will output the robot's pose and position information in the simulat
 **Note:** The testing program sends the unitree_go message. If you want to test G1 robot, you need to modify the program to use the unitree_hg message.
 
 
+### 3. G1 with dexterous hands
+
+`simulate_python/g1_hands_run.py` runs the G1 together with one of five dexterous hands. The body
+keeps using `rt/lowcmd` / `rt/lowstate` (29 motors); each hand has its own DDS topics and message
+types, the same ones the real hand uses, so code written for the robot can be tried here first.
+
+```bash
+cd ./simulate_python
+python3 ./g1_hands_run.py --hand dex3                    # also: dex1, brainco, inspire_ftp, inspire_dfx
+python3 ./g1_hands_run.py --hand brainco --no-band       # elastic band off
+python3 ./g1_hands_run.py --hand dex3 --free-base        # pelvis not welded to the world
+```
+
+| `--hand` | Topics | Message | Motors per hand |
+|---|---|---|---|
+| `dex3` | `rt/dex3/{left,right}/cmd`, `state` | `unitree_hg` `HandCmd_` / `HandState_` | 7 |
+| `dex1` | `rt/dex1/{left,right}/cmd`, `state` | `unitree_go` `MotorCmds_` / `MotorStates_` | 1 (2 simulated fingers) |
+| `brainco` | `rt/brainco/{left,right}/cmd`, `state` | `unitree_go` `MotorCmds_` / `MotorStates_` | 6 |
+| `inspire_ftp` | `rt/inspire_hand/ctrl/{l,r}`, `state/{l,r}` | `inspire_hand_ctrl` / `inspire_hand_state` | 6 |
+| `inspire_dfx` | `rt/inspire/cmd`, `state` (both hands) | `unitree_go` `MotorCmds_` / `MotorStates_` | 6 |
+
+The pelvis is welded to the world by default; `--free-base` releases it (there is no balance
+controller, so the robot falls unless the elastic band is on or you run one yourself).
+`--no-band` turns the band off, `--stand` starts in a standing pose.
+
+`inspire_ftp` needs the generated `inspire_dds` package of Inspire's SDK (`inspire_hand_ws`,
+`inspire_hand_sdk/inspire_sdkpy`): set `INSPIRE_SDKPY` to that folder.
+
+The hand joints are held by a joint-space PD (kp 8, kd 0.2). These gains are our choice for the
+simulated joints, not vendor values. The models, their sources and the motor order are described in
+[`unitree_robots/g1/g1_variants.md`](unitree_robots/g1/g1_variants.md).
+
+
 # Usage
 ## 1. Simulation Configuration
 ### C++ Simulator
