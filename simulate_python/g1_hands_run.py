@@ -35,7 +35,7 @@ NUM_BODY_MOTOR = 29  # LowCmd_/LowState_ slots used by the G1 body
 
 ROBOTS_DIR = "../unitree_robots/g1/"
 HANDS = {
-    "dex3": "scene_29dof_hand14_fixed_base.xml",
+    "dex3": "scene_29dof_dex3_fixed_base.xml",
     "dex1": "scene_29dof_dex1_fixed_base.xml",
     "inspire_ftp": "scene_29dof_inspire_ftp_fixed_base.xml",
     "inspire_dfx": "scene_29dof_inspire_dfx_fixed_base.xml",

@@ -1,6 +1,6 @@
 """
 DDS <-> MuJoCo bridge for the G1's hands, meant to run alongside (not instead of) the
-official UnitreeSdk2Bridge when using a body+hand model (g1_29dof_hand14.xml, 43 actuators:
+official UnitreeSdk2Bridge when using a body+hand model (g1_29dof_dex3.xml, 43 actuators:
 29 body + 7 left hand + 7 right hand).
 
 Why a separate bridge: the real Dex3 hand does NOT go over rt/lowcmd/rt/lowstate. Those use

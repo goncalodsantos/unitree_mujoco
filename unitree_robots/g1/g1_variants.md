@@ -12,6 +12,7 @@ rubber hand's mass is not counted on top of the new hand.
 
 | model | hand source (third_party/unitree_ros/robots) | body motors | hand motors |
 |---|---|---|---|
+| `g1_29dof_dex3.xml` | `g1_description/g1_29dof_with_hand_rev_1_0.urdf` (Dex3; thumb_1 range from Unitree's `.xml` of the same name, -0.724 rad, the URDF says -0.611) | 29 | 14 (7 per hand; order left thumb, middle, index / right thumb, index, middle, as in HandCmd_) |
 | `g1_29dof_dex1.xml` | `g1_description/g1_29dof_mode_15_with_dex1_1.urdf` | 29 | 4 (2 prismatic fingers per hand) |
 | `g1_29dof_inspire_ftp.xml` | `g1_description/g1_29dof_rev_1_0_with_inspire_hand_FTP.urdf` | 29 | 12 (6 per hand; the rest are mimic joints) |
 | `g1_29dof_inspire_dfx.xml` | `g1_description/g1_29dof_rev_1_0_with_inspire_hand_DFQ.urdf` (xr_teleoperate also uses this geometry for the DFX; thumb bend limited to 0..0.5 rad like there) | 29 | 12 (6 per hand; the rest are mimic joints) |
@@ -19,7 +20,7 @@ rubber hand's mass is not counted on top of the new hand.
 
 Actuator order: body in `LowCmd_` order (`left_hip_pitch` ... `right_wrist_yaw`), then left hand, then
 right hand. Sensors: jointpos for all actuators, then jointvel, then jointactuatorfrc, then IMU sensors
-(same layout as `g1_29dof_hand14.xml`).
+(the layout the bridge indexes).
 
 Hand joint dynamics (damping 0.01, armature 0.001) are our choice, not Unitree's. Mimic joints (URDF
 `<mimic>`) are `<equality><joint>` constraints. Tip joints with lower == upper limit were made fixed.
