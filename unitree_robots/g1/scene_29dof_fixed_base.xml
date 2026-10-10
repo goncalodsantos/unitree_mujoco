@@ -21,10 +21,7 @@
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
   </worldbody>
 
-  <!-- Solda a pelvis ao mundo na pose em que ela está no arranque (de pe,
-       upright, ver "pos" do body pelvis em g1_29dof.xml). O floating_base_joint
-       continua a existir (nao mexe na indexacao de motor_cmd/motor_state), so
-       fica com o movimento anulado pelo solver. -->
+  <!-- Weld the pelvis to the world -->
   <equality>
     <weld body1="pelvis" body2="world" solref="0.005 1"/>
   </equality>

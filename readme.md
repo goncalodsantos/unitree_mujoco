@@ -167,6 +167,8 @@ export INSPIRE_SDKPY=$PWD/inspire_hand_ws/inspire_hand_sdk/inspire_sdkpy
 python3 ./g1_hands_run.py --hand inspire_ftp
 ```
 
+The hand scenes are set at 1 ms timestep (the scenes with only body control uses 5 ms), otherwise the hands oscillate. --dt overrides it.
+
 The hand joints are held by a joint-space PD (kp 8, kd 0.2). These gains are our choice for the
 simulated joints, not vendor values. The models, their sources and the motor order are described in
 [`unitree_robots/g1/g1_variants.md`](unitree_robots/g1/g1_variants.md).
