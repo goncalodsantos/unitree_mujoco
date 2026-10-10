@@ -159,8 +159,13 @@ The pelvis is welded to the world by default; `--free-base` releases it (there i
 controller, so the robot falls unless the elastic band is on or you run one yourself).
 `--no-band` turns the band off, `--stand` starts in a standing pose.
 
-`inspire_ftp` needs the generated `inspire_dds` package of Inspire's SDK (`inspire_hand_ws`,
-`inspire_hand_sdk/inspire_sdkpy`): set `INSPIRE_SDKPY` to that folder.
+`inspire_ftp` needs the generated `inspire_dds` package of Inspire's SDK. Clone it and point
+`INSPIRE_SDKPY` at its `inspire_sdkpy` folder (no install needed; only that folder is put on the path):
+```bash
+git clone https://github.com/NaCl-1374/inspire_hand_ws
+export INSPIRE_SDKPY=$PWD/inspire_hand_ws/inspire_hand_sdk/inspire_sdkpy
+python3 ./g1_hands_run.py --hand inspire_ftp
+```
 
 The hand joints are held by a joint-space PD (kp 8, kd 0.2). These gains are our choice for the
 simulated joints, not vendor values. The models, their sources and the motor order are described in

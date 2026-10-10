@@ -103,7 +103,7 @@ from unitree_sdk2py.idl.default import unitree_go_msg_dds__MotorState_
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import MotorCmds_, MotorStates_
 
 # Inspire FTP message types come from the generated `inspire_dds` package of Inspire's SDK
-# (https://github.com/NaCl1/inspire_hand_ws, inspire_hand_sdk/inspire_sdkpy). Its inspire_sdkpy
+# (https://github.com/NaCl-1374/inspire_hand_ws, inspire_hand_sdk/inspire_sdkpy). Its inspire_sdkpy
 # __init__ pulls in PyQt/pymodbus, so only the inspire_dds package is put on the path. Point
 # INSPIRE_SDKPY at that folder; it is only needed for --hand inspire_ftp.
 def _inspire_dds():
