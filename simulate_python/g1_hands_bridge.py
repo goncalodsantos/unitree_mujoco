@@ -17,10 +17,6 @@ from unitree_sdk2py.idl.default import (
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_, MotorState_
 from unitree_sdk2py.utils.thread import RecurrentThread
 
-NUM_HAND_MOTOR = 7
-# The model has no tactile sensors: the 9 pressure sensors of the real Dex3 are published as zeros.
-NUM_PRESS_SENSOR = 9
-
 DEFAULT_HAND_KP = 8.0
 DEFAULT_HAND_KD = 0.2
 
@@ -28,6 +24,9 @@ DEFAULT_HAND_KD = 0.2
 class Dex3Bridge:
     """Dex3: rt/dex3/{left,right}/cmd|state (HandCmd_/HandState_), 7 motors. One instance per hand;
     `actuator_offset` is the index of its first motor (29 left, 36 right)."""
+
+    NUM_MOTORS = 7
+    NUM_PRESS_SENSORS = 9  # the real Dex3 has 9; the model has no tactile sensors, so they are zeros
 
     def __init__(self, mj_model, mj_data, side: str, actuator_offset: int):
         assert side in ("left", "right")
@@ -57,7 +56,7 @@ class Dex3Bridge:
         if self.last_cmd is None:
             return
         for i, motor_cmd in enumerate(self.last_cmd.motor_cmd):
-            if i >= NUM_HAND_MOTOR:
+            if i >= self.NUM_MOTORS:
                 break
             idx = self.offset + i
             q = self.mj_data.sensordata[idx]
@@ -69,7 +68,7 @@ class Dex3Bridge:
     def _publish_state(self) -> None:
         state = unitree_hg_msg_dds__HandState_()
         motor_states = []
-        for i in range(NUM_HAND_MOTOR):
+        for i in range(self.NUM_MOTORS):
             idx = self.offset + i
             ms = MotorState_(
                 mode=1,
@@ -85,7 +84,7 @@ class Dex3Bridge:
             )
             motor_states.append(ms)
         state.motor_state = motor_states
-        state.press_sensor_state = [unitree_hg_msg_dds__PressSensorState_() for _ in range(NUM_PRESS_SENSOR)]
+        state.press_sensor_state = [unitree_hg_msg_dds__PressSensorState_() for _ in range(self.NUM_PRESS_SENSORS)]
         self.state_puber.Write(state)
 
 
