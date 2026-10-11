@@ -23,7 +23,7 @@
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
   </worldbody>
 
-   <!-- Weld the pelvis to the world -->
+  <!-- Weld the pelvis to the world -->
   <equality>
     <weld body1="pelvis" body2="world" solref="0.005 1"/>
   </equality>
