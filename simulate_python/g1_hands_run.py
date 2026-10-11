@@ -39,7 +39,7 @@ HANDS = {
 }
 # Actuator names in the motor order each protocol uses. Inspire DFX: right hand first.
 DFX_ORDER = ["pinky_proximal", "ring_proximal", "middle_proximal", "index_proximal", "thumb_proximal_pitch", "thumb_proximal_yaw"]
-INSPIRE_ORDER = ["little_1", "ring_1", "middle_1", "index_1", "thumb_2", "thumb_1"]  
+FTP_ORDER = ["little_1", "ring_1", "middle_1", "index_1", "thumb_2", "thumb_1"]  
 BRAINCO_ORDER = ["thumb_proximal", "thumb_metacarpal", "index_proximal", "middle_proximal", "ring_proximal", "pinky_proximal"]
 
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -148,7 +148,7 @@ def make_hand_bridges():
             acts = [actuator_id(f"{side}_dex1_finger_joint_{k}") for k in (1, 2)]
             bridges.append(Dex1Bridge(mj_model, mj_data, side, acts))
         elif args.hand == "inspire_ftp":
-            acts = [actuator_id(f"{side}_{n}_joint") for n in INSPIRE_ORDER]
+            acts = [actuator_id(f"{side}_{n}_joint") for n in FTP_ORDER]
             bridges.append(InspireFTPBridge(mj_model, mj_data, side, acts))
         elif args.hand == "brainco":
             acts = [actuator_id(f"{side}_{n}_joint") for n in BRAINCO_ORDER]
