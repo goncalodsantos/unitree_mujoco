@@ -1,12 +1,9 @@
 """
-DDS <-> MuJoCo bridge for the G1's hands, meant to run alongside (not instead of) the
-official UnitreeSdk2Bridge when using a body+hand model (g1_29dof_dex3.xml, 43 actuators:
-29 body + 7 left hand + 7 right hand).
+DDS <-> MuJoCo bridges for the G1's hands: Dex3, Dex1, BrainCo, Inspire FTP and Inspire DFX.
 
-Why a separate bridge: the real Dex3 hand does NOT go over rt/lowcmd/rt/lowstate. Those use
-unitree_hg LowCmd_/LowState_, whose motor arrays have a fixed 35 slots, and 29 body + 14 hand
-= 43 would overflow them. The Dex3 uses its own topics (rt/dex3/{left,right}/cmd|state) with
-HandCmd_/HandState_. The body bridge must be limited to the first 29 actuators (see g1_hands_run.py).
+The body keeps rt/lowcmd and rt/lowstate (29 motors, see g1_hands_run.py). Each hand has its own
+topics and messages, as on the real robot: LowCmd_ has only 35 motor slots, so 29 body + 14 Dex3
+motors would not fit. The PD gains that hold the simulated hand joints are our choice, not the vendors'.
 """
 
 import os
@@ -21,16 +18,16 @@ from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_, MotorSt
 from unitree_sdk2py.utils.thread import RecurrentThread
 
 NUM_HAND_MOTOR = 7
-# The MuJoCo model has no touch sensors: the pressure sensors are published as zeros.
+# The model has no tactile sensors: the 9 pressure sensors of the real Dex3 are published as zeros.
 NUM_PRESS_SENSOR = 9
 
 DEFAULT_HAND_KP = 8.0
 DEFAULT_HAND_KD = 0.2
 
 
-class HandBridge:
-    """One instance per hand. `actuator_offset` is the mj_data.ctrl/sensordata index where
-    this hand's 7 motors start (29 for left, 36 for right)."""
+class Dex3Bridge:
+    """Dex3: rt/dex3/{left,right}/cmd|state (HandCmd_/HandState_), 7 motors. One instance per hand;
+    `actuator_offset` is the index of its first motor (29 left, 36 right)."""
 
     def __init__(self, mj_model, mj_data, side: str, actuator_offset: int):
         assert side in ("left", "right")
@@ -46,8 +43,7 @@ class HandBridge:
         self.state_puber.Init()
         self.cmd_suber = ChannelSubscriber(f"rt/dex3/{side}/cmd", HandCmd_)
         self.cmd_suber.Init(self._on_cmd, 10)
-        # State is published at 100 Hz, independent of the 1 kHz physics step: a faster
-        # RecurrentThread starves the CPU. PD control still runs every physics step.
+        # State at 100 Hz; the PD runs every physics step (apply_ctrl).
         self.state_thread = RecurrentThread(
             interval=0.01, target=self._publish_state, name=f"dex3_{side}_state"
         )
@@ -94,18 +90,15 @@ class HandBridge:
 
 
 # ---------------------------------------------------------------------------
-# Other hands. These use higher-level protocols, so each bridge converts the received
-# command to a joint target and runs a joint-space PD. The PD gains are OUR choices for
-# the simulated joints, not vendor values.
+# Other hands: higher-level protocols. The command becomes a joint target held by a joint-space PD.
 # ---------------------------------------------------------------------------
 import numpy as np
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__MotorState_
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import MotorCmds_, MotorStates_
 
-# Inspire FTP message types come from the generated `inspire_dds` package of Inspire's SDK
-# (https://github.com/NaCl-1374/inspire_hand_ws, inspire_hand_sdk/inspire_sdkpy). Its inspire_sdkpy
-# __init__ pulls in PyQt/pymodbus, so only the inspire_dds package is put on the path. Point
-# INSPIRE_SDKPY at that folder; it is only needed for --hand inspire_ftp.
+# Inspire FTP messages: the generated `inspire_dds` package of github.com/NaCl-1374/inspire_hand_ws
+# (inspire_hand_sdk/inspire_sdkpy). Set INSPIRE_SDKPY to that folder (only needed for inspire_ftp);
+# only inspire_dds is imported because the package around it needs PyQt.
 def _inspire_dds():
     path = os.environ.get("INSPIRE_SDKPY")
     if path:
@@ -130,8 +123,8 @@ class _JointPdHand:
         self.m, self.d = mj_model, mj_data
         self.act = list(actuator_indices)
         self.total = mj_model.nu
-        self.target = None  # set by the protocol handler
-        # joint limits, used to map normalised commands to angles
+        self.target = None  # set by the command handler
+        # joint limits, to map normalised commands to angles
         self.lo = np.array([mj_model.jnt_range[mj_model.actuator_trnid[a, 0], 0] for a in self.act])
         self.hi = np.array([mj_model.jnt_range[mj_model.actuator_trnid[a, 0], 1] for a in self.act])
         self.state_thread = RecurrentThread(interval=0.01, target=self._publish_state, name=publish_name)
@@ -158,24 +151,20 @@ class _JointPdHand:
 
 
 class Dex1Bridge(_JointPdHand):
-    """Dex1-1 gripper: rt/dex1/{left,right}/cmd|state, unitree_go MotorCmds_/MotorStates_,
-    ONE motor per gripper (cmds[0].q). q is the motor angle in rad, 0 = closed, ~5.4 rad = fully
-    open (about 9 cm of jaw opening). The sim model has two prismatic fingers (finger_joint_1/2),
-    mapped symmetrically from the joint's lower limit (closed) to its upper limit (open).
+    """Dex1-1 gripper: rt/dex1/{left,right}/cmd|state (MotorCmds_/MotorStates_), ONE motor per gripper.
+    q is the motor angle: 0 = closed, ~5.4 rad = open (~9 cm). The model has two prismatic fingers
+    that move together.
 
-    Like Unitree's dex1_1_service, the command's kp/kd/dq/tau are honoured:
-        tau_motor = tau + kp*(q_des - q) + kd*(dq_des - dq)        [motor side, rad]
-    The motor torque becomes a force on each slide through r = finger travel / motor travel
-    (m/rad): F = tau_motor / (2 r), i.e. a spring kp / (2 r^2) and a damper kd / (2 r^2) per finger.
-    The real gains are far too stiff for 0.09 kg fingers integrated explicitly at 1 ms, so the
-    stiffness is capped to a natural frequency of OMEGA_DT/dt, the damping is raised to critical
-    damping (limited to c*dt/m <= 0.5), and the force is limited to the actuator range.
-    A command with kp = kd = 0 falls back to the class kp/kd (N/m and N*s/m on the slides)."""
+    The command's kp/kd/dq/tau are honoured: tau_motor = tau + kp*(q_des - q) + kd*(dq_des - dq),
+    turned into a force per finger with r = finger travel / motor travel. The real gains are too
+    stiff for 0.09 kg fingers at 1 ms, so the spring is capped (OMEGA_DT/dt), the damping is raised
+    to critical and the force is limited to the actuator range. With kp = kd = 0 the class gains
+    are used (N/m and N*s/m on the slides)."""
 
     kp = 300.0
     kd = 10.0
     Q_OPEN = 5.4
-    OMEGA_DT = 0.3  # largest natural frequency of the simulated spring, as a fraction of 1/dt
+    OMEGA_DT = 0.3  # cap on the spring's natural frequency, as a fraction of 1/dt
 
     def __init__(self, mj_model, mj_data, side, actuator_indices):
         super().__init__(mj_model, mj_data, actuator_indices, f"dex1_{side}_state")
@@ -188,7 +177,7 @@ class Dex1Bridge(_JointPdHand):
         joint = mj_model.actuator_trnid[self.act[0], 0]
         self.mass = float(mj_model.body_mass[mj_model.jnt_bodyid[joint]] + mj_model.dof_armature[mj_model.jnt_dofadr[joint]])
         dt = mj_model.opt.timestep
-        self.k_max = self.mass * (self.OMEGA_DT / dt) ** 2  # N/m the explicit integration keeps stable
+        self.k_max = self.mass * (self.OMEGA_DT / dt) ** 2  # N/m, stable with explicit integration
         self.c_max = 0.5 * self.mass / dt                    # N*s/m (c*dt/m <= 0.5)
         self.f_max = float(mj_model.actuator_ctrlrange[self.act[0], 1])
         self.state_puber = ChannelPublisher(f"rt/dex1/{side}/state", MotorStates_)
@@ -212,8 +201,7 @@ class Dex1Bridge(_JointPdHand):
         x_des = self.lo_closed + float(np.clip(c.q, 0.0, self.Q_OPEN)) * self.r
         k = min(c.kp / (2 * self.r ** 2), self.k_max)
         damp = min(max(c.kd / (2 * self.r ** 2), 2.0 * np.sqrt(k * self.mass)), self.c_max)
-        # One PD per finger: the real gripper couples the jaws with a rail, here each finger is
-        # held to the same target (controlling only their mean leaves the difference unsprung).
+        # One PD per finger, both to the same target (the real gripper couples the jaws with a rail).
         for a, x, dx in zip(self.act, self.q(), self.dq()):
             force = c.tau / (2 * self.r) + k * (x_des - float(x)) + damp * (c.dq * self.r - float(dx))
             self.d.ctrl[a] = float(np.clip(force, -self.f_max, self.f_max))
@@ -228,9 +216,8 @@ class Dex1Bridge(_JointPdHand):
 
 
 class BrainCoBridge(_JointPdHand):
-    """BrainCo hand: rt/brainco/{left,right}/cmd|state, unitree_go MotorCmds_/MotorStates_, 6 motors in
-    the order [Thumb, Thumb_aux, Index, Middle, Ring, Pinky], q normalised to [0,1] (0 = open,
-    1 = closed). The speed (dq) is ignored. `actuator_indices` must follow that order."""
+    """BrainCo: rt/brainco/{left,right}/cmd|state (MotorCmds_/MotorStates_), 6 motors
+    [Thumb, Thumb_aux, Index, Middle, Ring, Pinky], q in [0, 1]: 0 = open, 1 = closed. dq is ignored."""
 
     kp = 8.0
     kd = 0.2
@@ -262,10 +249,9 @@ class BrainCoBridge(_JointPdHand):
 
 
 class InspireFTPBridge(_JointPdHand):
-    """Inspire FTP hand: rt/inspire_hand/ctrl/{l,r} and rt/inspire_hand/state/{l,r}, 6 motors in the
-    order [pinky, ring, middle, index, thumb-bend, thumb-rotation]. Only angle control is simulated
-    (mode bit 0): angle_set is 0..1000 with 1000 = open, 0 = closed, -1 = no change. Force/speed/
-    position modes and the touch topic are ignored. `actuator_indices` must follow that order."""
+    """Inspire FTP: rt/inspire_hand/ctrl|state/{l,r}, 6 motors [pinky, ring, middle, index,
+    thumb-bend, thumb-rotation]. Angle control only (mode bit 0): angle_set 0..1000, 1000 = open,
+    -1 = keep. The force, speed and position modes and the touch topic are not simulated."""
 
     kp = 8.0
     kd = 0.2
@@ -299,11 +285,9 @@ class InspireFTPBridge(_JointPdHand):
 
 
 class InspireDFXBridge(_JointPdHand):
-    """Inspire DFX hand (both hands on ONE topic): rt/inspire/cmd and rt/inspire/state, unitree_go
-    MotorCmds_/MotorStates_, 12 motors: right hand 0-5, left hand 6-11, each in the order
-    [pinky, ring, middle, index, thumb-bend, thumb-rotation]. Only q is used, normalised to [0,1]
-    with 0 = closed and 1 = open. `actuator_indices` must be the 12 actuators in that order.
-    Follows the G1 service (dfx_inspire_service/inspire_g1.cpp, default namespace "inspire")."""
+    """Inspire DFX: both hands on one topic, rt/inspire/cmd|state (MotorCmds_/MotorStates_), 12 motors:
+    right hand 0-5, left hand 6-11, each [pinky, ring, middle, index, thumb-bend, thumb-rotation].
+    Only q is used: 0 = closed, 1 = open. Follows dfx_inspire_service (inspire_g1.cpp)."""
 
     kp = 8.0
     kd = 0.2

@@ -1,15 +1,11 @@
 """
-Run the G1 sim with a dexterous hand/gripper attached (pelvis welded to the world by default).
+Run the G1 with a dexterous hand attached (pelvis welded to the world by default).
 
-- Body (29 motors): rt/lowcmd / rt/lowstate, like the plain unitree_mujoco.py entry point.
-- Hands: their own DDS protocols, see g1_hands_bridge.py.
+Body: rt/lowcmd and rt/lowstate (29 motors). Hands: their own DDS topics, see g1_hands_bridge.py.
 
-    conda activate g1
-    cd simulate_python
-    python g1_hands_run.py                          # Dex3, 43 actuators (default)
-    python g1_hands_run.py --hand dex1              # also: inspire_ftp, inspire_dfx, brainco
-    python g1_hands_run.py --hand dex1 --free-base  # pelvis not welded
-    python g1_hands_run.py --hand dex1 --no-band    # elastic band off
+    python g1_hands_run.py                          # Dex3 (default)
+    python g1_hands_run.py --hand brainco           # also: dex1, inspire_ftp, inspire_dfx
+    python g1_hands_run.py --hand dex1 --free-base --no-band
 """
 
 import argparse
@@ -26,7 +22,7 @@ from unitree_sdk2py.idl.unitree_go.msg.dds_ import SportModeState_
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
 from unitree_sdk2py.utils.thread import RecurrentThread
 
-from g1_hands_bridge import BrainCoBridge, Dex1Bridge, HandBridge, InspireDFXBridge, InspireFTPBridge
+from g1_hands_bridge import BrainCoBridge, Dex1Bridge, Dex3Bridge, InspireDFXBridge, InspireFTPBridge
 from unitree_sdk2py_bridge import ElasticBand
 
 DOMAIN_ID = 1
@@ -41,19 +37,18 @@ HANDS = {
     "inspire_dfx": "scene_29dof_inspire_dfx_fixed_base.xml",
     "brainco": "scene_29dof_brainco_fixed_base.xml",
 }
-# Actuator names per hardware motor index, per side (the order each protocol uses).
-# Inspire DFX: one topic for both hands, right hand first.
+# Actuator names in the motor order each protocol uses. Inspire DFX: right hand first.
 DFX_ORDER = ["pinky_proximal", "ring_proximal", "middle_proximal", "index_proximal", "thumb_proximal_pitch", "thumb_proximal_yaw"]
-INSPIRE_ORDER = ["little_1", "ring_1", "middle_1", "index_1", "thumb_2", "thumb_1"]  # pinky, ring, middle, index, thumb-bend, thumb-rotation
-BRAINCO_ORDER = ["thumb_proximal", "thumb_metacarpal", "index_proximal", "middle_proximal", "ring_proximal", "pinky_proximal"]  # Thumb, Thumb_aux, Index, Middle, Ring, Pinky
+INSPIRE_ORDER = ["little_1", "ring_1", "middle_1", "index_1", "thumb_2", "thumb_1"]  
+BRAINCO_ORDER = ["thumb_proximal", "thumb_metacarpal", "index_proximal", "middle_proximal", "ring_proximal", "pinky_proximal"]
 
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument("--hand", choices=list(HANDS), default="dex3")
-parser.add_argument("--domain-id", type=int, default=DOMAIN_ID, help="DDS domain (change it to run a second sim next to another one)")
-parser.add_argument("--no-band", action="store_true", help="start with the elastic band off (it pulls the torso toward a point 3 m above the world; toggle it with key 9). Use it when measuring tracking errors")
-parser.add_argument("--free-base", action="store_true", help="do not weld the pelvis to the world (the robot has no balance controller and will fall; use the elastic band, key 9)")
+parser.add_argument("--domain-id", type=int, default=DOMAIN_ID, help="DDS domain (change it to run a second sim)")
+parser.add_argument("--no-band", action="store_true", help="start with the elastic band off (it pulls the torso up; key 9 toggles it)")
+parser.add_argument("--free-base", action="store_true", help="do not weld the pelvis to the world (no balance controller: the robot falls unless the band is on)")
 parser.add_argument("--dt", type=float, help="physics step in seconds (default: the scene's, 0.001)")
-parser.add_argument("--stand", action="store_true", help="start in the standing pose of the balance policy and freeze the physics until the first rt/lowcmd arrives (use with --free-base and a balance controller)")
+parser.add_argument("--stand", action="store_true", help="start standing and freeze the physics until the first rt/lowcmd arrives (for --free-base with a balance controller)")
 args = parser.parse_args()
 
 locker = threading.Lock()
@@ -63,13 +58,13 @@ mj_model = mujoco.MjModel.from_xml_path(ROBOTS_DIR + scene)
 if args.dt:
     mj_model.opt.timestep = args.dt
 mj_data = mujoco.MjData(mj_model)
-if args.stand:  # legs and waist of a standing pose (the default pose of NVIDIA's GR00T-WholeBodyControl balance policy), pelvis just above the floor
+if args.stand:  # standing pose of legs and waist, pelvis just above the floor
     mj_data.qpos[2] = 0.78
     for i, angle in enumerate([-0.1, 0, 0, 0.3, -0.2, 0] * 2 + [0, 0, 0]):
         mj_data.qpos[mj_model.jnt_qposadr[mj_model.actuator_trnid[i, 0]]] = angle
     mujoco.mj_forward(mj_model, mj_data)
 
-# DDS motor index -> actuator index for the body (identity: the models list the 29 body motors first).
+# DDS motor index -> actuator index (identity: the 29 body motors come first in the models).
 BODY_MAP = {i: i for i in range(NUM_BODY_MOTOR)}
 N_BODY_ACT = len(BODY_MAP)
 
@@ -87,9 +82,8 @@ viewer = mujoco.viewer.launch_passive(mj_model, mj_data, key_callback=elastic_ba
 
 
 class BodyBridge29:
-    """Same LowCmd_/LowState_ PD logic as UnitreeSdk2Bridge, but only for the body motors -
-    deliberately NOT using mj_model.nu (which also counts the hand motors and would index
-    past LowCmd_.motor_cmd's fixed 35 slots)."""
+    """LowCmd_/LowState_ bridge for the 29 body motors only. UnitreeSdk2Bridge loops over mj_model.nu,
+    which here includes the hand motors and would pass LowCmd_'s 35 slots."""
 
     def __init__(self, mj_model, mj_data):
         self.mj_model = mj_model
@@ -100,13 +94,13 @@ class BodyBridge29:
         self.low_state_puber.Init()
         self.low_cmd_suber = ChannelSubscriber("rt/lowcmd", LowCmd_)
         self.low_cmd_suber.Init(self.LowCmdHandler, 10)
-        # IMU of the pelvis, read by sensor name (the models list imu_quat, imu_gyro, imu_acc after the motor sensors)
+        # pelvis IMU, by sensor name (they come after the motor sensors)
         self.imu_adr = {n: int(mj_model.sensor(n).adr[0]) for n in ("imu_quat", "imu_gyro", "imu_acc", "frame_pos", "frame_vel")}
-        # base position and velocity in the world, on the same topic and type as the official bridge
+        # base position and velocity, on the same topic as the official bridge
         self.base_state = unitree_go_msg_dds__SportModeState_()
         self.base_state_puber = ChannelPublisher("rt/sportmodestate", SportModeState_)
         self.base_state_puber.Init()
-        # 100 Hz, not the 1 kHz physics rate (see g1_hands_bridge.py)
+        # 100 Hz
         self.state_thread = RecurrentThread(
             interval=0.01, target=self.PublishLowState, name="g1_hands_lowstate"
         )
@@ -144,7 +138,7 @@ class BodyBridge29:
 def make_hand_bridges():
     if args.hand == "dex3":
         assert mj_model.nu == N_BODY_ACT + 14, f"expected {N_BODY_ACT} body + 14 hand actuators, got {mj_model.nu}"
-        return [HandBridge(mj_model, mj_data, "left", N_BODY_ACT), HandBridge(mj_model, mj_data, "right", N_BODY_ACT + 7)]
+        return [Dex3Bridge(mj_model, mj_data, "left", N_BODY_ACT), Dex3Bridge(mj_model, mj_data, "right", N_BODY_ACT + 7)]
     if args.hand == "inspire_dfx":
         acts = [actuator_id(f"{side}_{n}_joint") for side in ("R", "L") for n in DFX_ORDER]
         return [InspireDFXBridge(mj_model, mj_data, acts)]
@@ -169,7 +163,7 @@ def simulation_thread():
 
     while viewer.is_running():
         step_start = time.perf_counter()
-        if args.stand and not body_bridge.got_cmd:  # wait for the controller, the robot stays where it was put
+        if args.stand and not body_bridge.got_cmd:  # wait for a controller
             time.sleep(0.01)
             continue
 
@@ -179,7 +173,7 @@ def simulation_thread():
                 mj_data.qpos[:3], mj_data.qvel[:3]
             )
         else:
-            mj_data.xfrc_applied[band_attached_link, :3] = 0.0  # no stale force after toggling the band off
+            mj_data.xfrc_applied[band_attached_link, :3] = 0.0  # band off: clear the last force
         for hand in hand_bridges:
             hand.apply_ctrl()
         mujoco.mj_step(mj_model, mj_data)
