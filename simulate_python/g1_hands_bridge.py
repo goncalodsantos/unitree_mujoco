@@ -6,8 +6,8 @@ topics and messages, as on the real robot: LowCmd_ has only 35 motor slots, so 2
 motors would not fit. The PD gains that hold the simulated hand joints are our choice, not the vendors'.
 """
 
+import os
 import sys
-from pathlib import Path
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber
 from unitree_sdk2py.idl.default import (
@@ -95,10 +95,25 @@ import numpy as np
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__MotorState_
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import MotorCmds_, MotorStates_
 
-# Inspire FTP messages: the generated `inspire_dds` package of the inspire_hand_ws submodule; only that
-# package is put on the path because the one around it (inspire_sdkpy) needs PyQt.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "inspire_hand_ws/inspire_hand_sdk/inspire_sdkpy"))
-from inspire_dds import inspire_hand_ctrl, inspire_hand_state
+inspire_hand_ctrl = inspire_hand_state = None
+
+
+def _load_inspire_messages():
+    """Inspire FTP messages: the generated `inspire_dds` package of https://github.com/NaCl-1374/inspire_hand_ws
+    (inspire_hand_sdk/inspire_sdkpy). Only needed for the FTP hand, so it is imported when that bridge is created.
+    Point INSPIRE_SDK_PATH at that inspire_sdkpy folder (only `inspire_dds` is used; the package around it needs PyQt)."""
+    global inspire_hand_ctrl, inspire_hand_state
+    if inspire_hand_ctrl is not None:
+        return
+    path = os.environ.get("INSPIRE_SDK_PATH")
+    if path:
+        sys.path.insert(0, path)
+    try:
+        from inspire_dds import inspire_hand_ctrl, inspire_hand_state
+    except ImportError as e:
+        raise ImportError(
+            "The Inspire FTP bridge needs the `inspire_dds` messages from inspire_hand_ws: "
+            "set INSPIRE_SDK_PATH to its inspire_hand_sdk/inspire_sdkpy folder") from e
 
 
 class _JointPdHand:
@@ -245,6 +260,7 @@ class InspireFTPBridge(_JointPdHand):
     kd = 0.2
 
     def __init__(self, mj_model, mj_data, side, actuator_indices):
+        _load_inspire_messages()
         super().__init__(mj_model, mj_data, actuator_indices, f"inspire_{side}_state")
         assert len(self.act) == 6
         self.openness = np.ones(6)
