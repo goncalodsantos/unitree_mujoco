@@ -47,7 +47,7 @@ parser.add_argument("--hand", choices=list(HANDS), default="dex3")
 parser.add_argument("--domain-id", type=int, default=DOMAIN_ID, help="DDS domain (change it to run a second sim)")
 parser.add_argument("--no-band", action="store_true", help="start with the elastic band off (it pulls the torso up; key 9 toggles it)")
 parser.add_argument("--free-base", action="store_true", help="do not weld the pelvis to the world (no balance controller: the robot falls unless the band is on)")
-parser.add_argument("--dt", type=float, help="physics step in seconds (default: the scene's, 0.001)")
+parser.add_argument("--dt", type=float, help="physics step in seconds (default: the scene's, 0.002)")
 parser.add_argument("--stand", action="store_true", help="start standing and freeze the physics until the first rt/lowcmd arrives (for --free-base with a balance controller)")
 args = parser.parse_args()
 

@@ -1,7 +1,9 @@
 <mujoco model="g1_29dof_inspire_dfx scene (free base)">
   <include file="g1_29dof_inspire_dfx.xml"/>
 
-  <option timestep="0.001"/>
+  <!-- Physics step: 2 ms (500 Hz), the rate of Unitree's C++ simulator and of the LowCmd. The 5 ms that unitree_mujoco.py
+       sets for the body-only scene (SIMULATE_DT) is too coarse for the finger links (the Dex3 oscillates). -->
+  <option timestep="0.002"/>
 
   <statistic center="0 0 0.5" extent="2.0"/>
 

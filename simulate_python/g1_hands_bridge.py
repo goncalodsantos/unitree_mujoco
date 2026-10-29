@@ -145,7 +145,7 @@ class Dex1Bridge(_JointPdHand):
 
     The command's kp/kd/dq/tau are honoured: tau_motor = tau + kp*(q_des - q) + kd*(dq_des - dq),
     turned into a force per finger with r = finger travel / motor travel. The real gains are too
-    stiff for 0.09 kg fingers at 1 ms, so the spring is capped (OMEGA_DT/dt), the damping is raised
+    stiff for 0.09 kg fingers at 2 ms, so the spring is capped (OMEGA_DT/dt), the damping is raised
     to critical and the force is limited to the actuator range. With kp = kd = 0 the class gains
     are used (N/m and N*s/m on the slides)."""
 
