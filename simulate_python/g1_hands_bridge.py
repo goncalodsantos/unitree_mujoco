@@ -88,9 +88,7 @@ class Dex3Bridge:
         self.state_puber.Write(state)
 
 
-# ---------------------------------------------------------------------------
 # Other hands: higher-level protocols. The command becomes a joint target held by a joint-space PD.
-# ---------------------------------------------------------------------------
 import numpy as np
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__MotorState_
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import MotorCmds_, MotorStates_
@@ -154,7 +152,7 @@ class _JointPdHand:
 
 
 class Dex1Bridge(_JointPdHand):
-    """Dex1-1 gripper: rt/dex1/{left,right}/cmd|state (MotorCmds_/MotorStates_), ONE motor per gripper.
+    """Dex1-1 gripper: rt/dex1/{left,right}/cmd|state (MotorCmds_/MotorStates_), one motor per gripper.
     q is the motor angle: 0 = closed, ~5.4 rad = open (~9 cm). The model has two prismatic fingers
     that move together.
 
@@ -290,7 +288,7 @@ class InspireFTPBridge(_JointPdHand):
 class InspireDFXBridge(_JointPdHand):
     """Inspire DFX: both hands on one topic, rt/inspire/cmd|state (MotorCmds_/MotorStates_), 12 motors:
     right hand 0-5, left hand 6-11, each [pinky, ring, middle, index, thumb-bend, thumb-rotation].
-    Only q is used: 0 = closed, 1 = open. Follows dfx_inspire_service (inspire_g1.cpp)."""
+    Only q is used: 0 = closed, 1 = open."""
 
     kp = 8.0
     kd = 0.2
